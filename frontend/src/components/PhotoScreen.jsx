@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 export default function PhotoScreen({ onUploadSuccess }) {
+  const [activeTab, setActiveTab] = useState('upload');
   const [photoType, setPhotoType] = useState('meal');
   const [previewUrl, setPreviewUrl] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -65,7 +66,7 @@ export default function PhotoScreen({ onUploadSuccess }) {
       if (onUploadSuccess) {
         onUploadSuccess(data);
       }
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: '保存中にエラーが発生しました。' });
     } finally {
       setIsUploading(false);
@@ -82,128 +83,166 @@ export default function PhotoScreen({ onUploadSuccess }) {
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-5rem)] px-5 py-6">
-      <header className="text-center mb-5">
-        <h1 className="text-xl font-bold text-neutral-800">写真記録</h1>
-        <p className="text-xs text-neutral-500 mt-1">食事や体型を撮影して変化を残しましょう</p>
+    <div className="flex flex-col space-y-3 pb-2">
+      <header className="flex items-center justify-between px-0.5">
+        <div>
+          <h1 className="text-base font-extrabold text-slate-900 leading-tight">写真記録</h1>
+          <p className="text-[10px] text-slate-500">食事や体型を撮影して変化を記録</p>
+        </div>
+        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200/70">
+          保存済 {savedPhotos.length}枚
+        </span>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-200/70 rounded-xl mb-5">
-        <button
-          onClick={() => setPhotoType('meal')}
-          className={`py-2 text-xs font-bold rounded-lg transition-all ${
-            photoType === 'meal'
-              ? 'bg-white text-green-700 shadow-sm'
-              : 'text-neutral-600 hover:text-neutral-800'
+      {message && (
+        <div
+          className={`w-full p-2.5 rounded-xl text-[11px] font-bold text-center border ${
+            message.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border-rose-200'
           }`}
         >
-          食事を記録
-        </button>
-        <button
-          onClick={() => setPhotoType('body')}
-          className={`py-2 text-xs font-bold rounded-lg transition-all ${
-            photoType === 'body'
-              ? 'bg-white text-green-700 shadow-sm'
-              : 'text-neutral-600 hover:text-neutral-800'
-          }`}
-        >
-          体型を記録
-        </button>
-      </div>
-
-      <div className="flex flex-col items-center justify-center">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
-          id="photo-input"
-        />
-
-        {previewUrl ? (
-          <div className="w-full flex flex-col items-center">
-            <div className="relative w-full aspect-square max-w-xs rounded-2xl overflow-hidden border-2 border-green-500 shadow-md bg-neutral-900">
-              <img
-                src={previewUrl}
-                alt="プレビュー"
-                className="w-full h-full object-cover"
-              />
-              <button
-                onClick={handleReset}
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center text-sm hover:bg-black/80 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="w-full max-w-xs mt-4 flex gap-3">
-              <button
-                onClick={handleUpload}
-                disabled={isUploading}
-                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-md transition-colors disabled:opacity-50 text-sm"
-              >
-                {isUploading ? '保存中...' : 'この写真を記録する'}
-              </button>
-              <button
-                onClick={handleReset}
-                disabled={isUploading}
-                className="px-4 py-3 bg-neutral-200 hover:bg-neutral-300 text-neutral-700 font-bold rounded-xl text-sm transition-colors"
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        ) : (
-          <label
-            htmlFor="photo-input"
-            className="w-full aspect-square max-w-xs rounded-2xl border-2 border-dashed border-neutral-300 bg-white hover:border-green-500 hover:bg-green-50/30 transition-all flex flex-col items-center justify-center cursor-pointer p-6 text-center shadow-sm"
-          >
-            <div className="w-16 h-16 rounded-full bg-green-50 text-green-600 flex items-center justify-center mb-3">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <span className="text-sm font-bold text-neutral-700">写真を撮影または選択</span>
-            <span className="text-xs text-neutral-400 mt-1">タップしてカメラ・アルバムを起動</span>
-          </label>
-        )}
-
-        {message && (
-          <div
-            className={`w-full max-w-xs mt-4 p-3 rounded-xl text-xs font-semibold text-center ${
-              message.type === 'success'
-                ? 'bg-green-100 text-green-800 border border-green-200'
-                : 'bg-red-100 text-red-800 border border-red-200'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-      </div>
-
-      {savedPhotos.length > 0 && (
-        <section className="mt-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-bold text-neutral-700">保存済みの写真履歴</h2>
-            <span className="text-[11px] text-neutral-400">{savedPhotos.length} 枚</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {savedPhotos.map((photo) => (
-              <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden bg-neutral-200 shadow-sm border border-neutral-100 group">
-                <img src={photo.url} alt="写真履歴" className="w-full h-full object-cover" />
-                <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded font-medium">
-                  {photo.record_type === 'meal' ? '食事' : '体型'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
+          {message.text}
+        </div>
       )}
 
-      <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-200 text-xs text-neutral-500 mt-6 text-center">
-        💡 写真は完全無料のローカルデータベースに安全に保存されます
-      </div>
+      <section className="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-3">
+        <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setActiveTab('upload')}
+            className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              activeTab === 'upload'
+                ? 'bg-white text-emerald-700 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            📷 写真を撮影・保存
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('gallery')}
+            className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              activeTab === 'gallery'
+                ? 'bg-white text-emerald-700 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            🖼️ 写真履歴 ({savedPhotos.length})
+          </button>
+        </div>
+
+        {activeTab === 'upload' ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/70">
+              <span className="text-xs font-bold text-slate-700">記録カテゴリー</span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPhotoType('meal')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    photoType === 'meal'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 border border-slate-200'
+                  }`}
+                >
+                  🍽️ 食事
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoType('body')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    photoType === 'body'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 border border-slate-200'
+                  }`}
+                >
+                  💪 体型
+                </button>
+              </div>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+              id="photo-input"
+            />
+
+            {previewUrl ? (
+              <div className="space-y-2.5">
+                <div className="relative w-full h-44 rounded-xl overflow-hidden border border-emerald-500 bg-slate-900">
+                  <img
+                    src={previewUrl}
+                    alt="プレビュー"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/60 text-white flex items-center justify-center text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="col-span-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition-colors disabled:opacity-50 text-xs cursor-pointer"
+                  >
+                    {isUploading ? '保存中...' : 'この写真を記録する'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={isUploading}
+                    className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label
+                htmlFor="photo-input"
+                className="w-full h-40 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/70 hover:border-emerald-500 hover:bg-emerald-50/30 transition-all flex flex-col items-center justify-center cursor-pointer p-4 text-center"
+              >
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/70 flex items-center justify-center mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                <span className="text-xs font-bold text-slate-800">写真を撮影または選択</span>
+                <span className="text-[10px] text-slate-400 mt-0.5">タップしてカメラ・アルバムを起動</span>
+              </label>
+            )}
+          </div>
+        ) : (
+          <div>
+            {savedPhotos.length === 0 ? (
+              <div className="p-6 bg-slate-50 rounded-xl border border-slate-200/70 text-center text-xs text-slate-400">
+                保存された写真はまだありません
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2.5">
+                {savedPhotos.map((photo) => (
+                  <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 shadow-2xs border border-slate-200">
+                    <img src={photo.url} alt="写真履歴" className="w-full h-full object-cover" />
+                    <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded font-bold">
+                      {photo.record_type === 'meal' ? '食事' : '体型'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

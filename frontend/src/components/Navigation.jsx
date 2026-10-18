@@ -50,29 +50,25 @@ export default function Navigation({ activeTab, onSelectTab }) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-200 shadow-sm z-50 safe-bottom">
-      <div className="flex justify-around items-center h-15 px-1">
+    <nav className="shrink-0 w-full bg-white border-t border-slate-200 px-3 pt-2 safe-bottom-mobile z-20">
+      <div className="grid grid-cols-5 gap-1.5 items-center">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              type="button"
               onClick={() => onSelectTab(tab.id)}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 relative transition-colors cursor-pointer ${
-                isActive ? 'text-blue-600 font-bold' : 'text-slate-500 hover:text-slate-700 font-medium'
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-blue-50/80 text-blue-600 font-bold border border-blue-200/70 shadow-2xs'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50 font-medium border border-transparent'
               }`}
             >
               <div className="flex items-center justify-center">
                 {tab.icon}
               </div>
-              <div className="h-1 flex items-center justify-center mt-0.5 mb-0.5">
-                {isActive ? (
-                  <span className="w-4 h-0.5 bg-blue-600 rounded-full" />
-                ) : (
-                  <span className="w-4 h-0.5 bg-transparent" />
-                )}
-              </div>
-              <span className={`text-[10.5px] leading-tight ${isActive ? 'font-bold text-blue-600' : 'text-slate-500'}`}>
+              <span className={`text-[10px] leading-tight mt-1 ${isActive ? 'font-bold text-blue-600' : 'text-slate-500'}`}>
                 {tab.label}
               </span>
             </button>

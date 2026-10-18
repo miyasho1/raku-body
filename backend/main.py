@@ -410,21 +410,21 @@ async def analyze_body_target(
     ideal_files: List[UploadFile] = File(...),
     current_file: UploadFile = File(...)
 ):
-    saved_ideal_urls = []
+    temp_paths = []
     for f in ideal_files:
         ext = os.path.splitext(f.filename)[1] or ".jpg"
         fn = f"ideal_{uuid.uuid4()}{ext}"
         fp = os.path.join(UPLOAD_DIR, fn)
         with open(fp, "wb") as buf:
             shutil.copyfileobj(f.file, buf)
-        saved_ideal_urls.append(f"/uploads/{fn}")
+        temp_paths.append(fp)
 
     c_ext = os.path.splitext(current_file.filename)[1] or ".jpg"
     c_fn = f"curr_{uuid.uuid4()}{c_ext}"
     c_fp = os.path.join(UPLOAD_DIR, c_fn)
     with open(c_fp, "wb") as buf:
         shutil.copyfileobj(current_file.file, buf)
-    saved_curr_url = f"/uploads/{c_fn}"
+    temp_paths.append(c_fp)
 
     gemini_key = os.getenv("GEMINI_API_KEY")
     analysis_data = None
@@ -551,6 +551,13 @@ async def analyze_body_target(
             "advice": "1つの種目で複数の筋肉群を同時に動かす『コンパウンド（複合関節）種目』を中心に行うことで、最短ルートで理想のボディラインへ到達できます。運動後は手のひら一杯分のタンパク質補給を忘れずに！"
         }
 
+    for p in temp_paths:
+        try:
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
+
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     analysis_id = str(uuid.uuid4())
     conn = get_db_connection()
@@ -560,7 +567,7 @@ async def analyze_body_target(
         """INSERT INTO body_analysis_results 
            (id, ideal_images, current_image, analysis_json, created_at) 
            VALUES (?, ?, ?, ?, ?)""",
-        (analysis_id, json.dumps(saved_ideal_urls), saved_curr_url, json.dumps(analysis_data, ensure_ascii=False), now_str)
+        (analysis_id, json.dumps([]), "", json.dumps(analysis_data, ensure_ascii=False), now_str)
     )
     conn.commit()
     conn.close()
@@ -569,8 +576,8 @@ async def analyze_body_target(
         "success": True,
         "id": analysis_id,
         "data": analysis_data,
-        "ideal_urls": saved_ideal_urls,
-        "current_url": saved_curr_url
+        "ideal_urls": [],
+        "current_url": ""
     }
 
 @app.get("/api/body-analysis")
@@ -1214,9 +1221,15 @@ async def analyze_nutrition_label(image: UploadFile = File(...)):
             "carbs_g": 1.8
         }
 
+    try:
+        if os.path.exists(saved_path):
+            os.remove(saved_path)
+    except Exception:
+        pass
+
     return {
         "success": True,
-        "image_url": image_url,
+        "image_url": "",
         "data": extracted_data
     }
 
@@ -1231,8 +1244,6 @@ async def analyze_meal(
 
     with open(saved_path, "wb") as buffer:
         shutil.copyfileobj(image.file, buffer)
-
-    image_url = f"/uploads/{unique_fn}"
 
     analysis_data = None
     gemini_key = os.getenv("GEMINI_API_KEY")
@@ -1283,6 +1294,12 @@ async def analyze_meal(
         except Exception:
             analysis_data = None
 
+    try:
+        if os.path.exists(saved_path):
+            os.remove(saved_path)
+    except Exception:
+        pass
+
     if not analysis_data:
         analysis_data = {
             "meal_name": "特製チキングリルと彩り温野菜・玄米プレート",
@@ -1310,7 +1327,7 @@ async def analyze_meal(
 
     return {
         "success": True,
-        "image_url": image_url,
+        "image_url": "",
         "meal_type": meal_type,
         "analysis": analysis_data
     }
@@ -1486,4 +1503,202 @@ def get_correlation_analysis():
         "timeline": timeline_data
     }
 
+@app.post("/api/demo/seed")
+def seed_week_demo_data():
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
+    cursor.execute("DELETE FROM training_logs")
+    cursor.execute("DELETE FROM workout_logs")
+    cursor.execute("DELETE FROM meal_logs")
+    cursor.execute("DELETE FROM body_metrics")
+
+    base_date = date.today() - timedelta(days=6)
+    sample_weights = [65.8, 65.5, 65.3, 65.1, 64.9, 64.6, 64.4]
+    sample_fats = [19.4, 19.2, 19.0, 18.8, 18.6, 18.4, 18.2]
+
+    workout_plan = [
+        ("gym", "チェストプレスマシン（胸）", 20, 35.0, 10, 3, "大胸筋中部を意識してコントロール"),
+        ("home", "プランク＆アブローラー（体幹）", 15, 0.0, 15, 3, "腹直筋と体幹の安定化"),
+        ("gym", "ラットプルダウン（背中）", 25, 40.0, 10, 3, "肩甲骨を寄せて広背筋を刺激"),
+        ("gym", "バーベルスクワット（脚）", 25, 50.0, 10, 3, "下半身全体と代謝アップ"),
+        ("gym", "ダンベルショルダープレス（肩）", 20, 14.0, 10, 3, "三角筋の丸みと逆三角形ライン"),
+        ("home", "プッシュアップ＆アームカール（腕・胸）", 20, 12.0, 12, 3, "上腕二頭筋と大胸筋のパンプ"),
+        ("gym", "シーテッドローイング＆ベンチプレス（胸・背中）", 30, 42.5, 10, 4, "上半身複合トレーニング完遂")
+    ]
+
+    daily_meals_plan = [
+        [
+            ("07:30", "オートミール＆ギリシャヨーグルト", 360, 22.0, 6.5, 52.0, 5.5, 0.8),
+            ("12:30", "鶏胸肉グリルと玄米プレート", 580, 42.0, 11.0, 74.0, 6.8, 1.9),
+            ("16:00", "ゴールドスタンダード ホエイ（水割り）", 120, 24.0, 1.0, 2.0, 0.0, 0.2),
+            ("19:30", "サーモン塩焼きと豆腐サラダ定食", 590, 36.5, 18.0, 65.0, 6.2, 2.1)
+        ],
+        [
+            ("07:45", "全粒粉トーストとゆで卵2個・プロテイン", 420, 32.0, 12.5, 44.0, 4.2, 1.2),
+            ("12:15", "サバの塩焼き和定食（玄米）", 640, 34.0, 22.0, 72.0, 5.8, 2.3),
+            ("16:30", "ザバス ホエイプロテイン100（豆乳割り）", 203, 26.7, 6.0, 10.3, 0.5, 0.4),
+            ("20:00", "豚ヒレ肉とブロッコリーのオイスター炒め", 540, 38.0, 13.5, 62.0, 7.0, 2.0)
+        ],
+        [
+            ("07:30", "バナナ＆ホエイプロテインスムージー", 340, 27.5, 4.5, 48.0, 4.0, 0.5),
+            ("12:30", "牛赤身ステーキ150g＆温野菜ライス", 660, 44.0, 18.5, 76.0, 6.4, 2.1),
+            ("17:00", "マイプロテイン Impact アイソレート（水割り）", 93, 22.0, 0.3, 0.6, 0.0, 0.1),
+            ("19:45", "鶏ささみとアボカドのパワーサラダ＆雑穀米", 510, 37.0, 14.0, 58.0, 7.5, 1.7)
+        ],
+        [
+            ("08:00", "和風だし茶漬け＆納豆・温泉卵", 410, 21.5, 9.0, 60.0, 5.1, 2.0),
+            ("12:30", "サラダチキンと玄米おにぎり2個・野菜スープ", 550, 39.0, 7.5, 80.0, 6.0, 2.2),
+            ("16:00", "ゴールドスタンダード ホエイ（牛乳割り）", 254, 30.8, 8.8, 11.9, 0.0, 0.3),
+            ("19:30", "タラと彩り野菜の蒸し鍋・豆腐", 480, 36.0, 8.5, 56.0, 8.2, 2.1)
+        ],
+        [
+            ("07:30", "オートミール豆乳リゾット（鶏むね入り）", 390, 28.0, 7.5, 52.0, 5.8, 1.4),
+            ("12:20", "マグロ赤身・アボカドポキ丼", 610, 38.5, 15.0, 78.0, 5.5, 2.0),
+            ("16:30", "ザバス ソイプロテイン100（水割り）", 107, 20.0, 1.2, 3.6, 0.4, 0.3),
+            ("20:00", "鶏むね肉のトマト煮込み＆全粒粉パスタ", 590, 40.0, 11.5, 76.0, 6.9, 2.2)
+        ],
+        [
+            ("08:00", "高タンパクパンケーキ＆ベリー", 430, 29.0, 9.5, 56.0, 4.8, 0.9),
+            ("12:45", "豚しゃぶとたっぷり香味野菜の定食", 590, 36.0, 16.0, 70.0, 6.5, 2.1),
+            ("16:15", "ゴールドスタンダード ホエイ（水割り）", 120, 24.0, 1.0, 2.0, 0.0, 0.2),
+            ("19:30", "カツオのたたきと玄米・具沢山みそ汁", 540, 41.0, 10.0, 68.0, 6.2, 2.3)
+        ],
+        [
+            ("07:30", "ギリシャヨーグルト＆オートミール・ゆで卵", 380, 26.5, 8.0, 49.0, 5.0, 0.8),
+            ("12:30", "特製チキングリルと彩り温野菜・玄米プレート", 560, 38.5, 12.0, 72.0, 7.2, 1.8),
+            ("15:30", "ゴールドスタンダード ホエイ（水割り）", 120, 24.0, 1.0, 2.0, 0.0, 0.2),
+            ("19:15", "鮭のホイル焼き＆ひじき豆腐サラダ定食", 570, 37.5, 15.5, 66.0, 6.8, 2.0)
+        ]
+    ]
+
+    for i in range(7):
+        d_obj = base_date + timedelta(days=i)
+        d_str = d_obj.strftime("%Y-%m-%d")
+
+        cursor.execute(
+            "INSERT INTO body_metrics (id, date, weight, body_fat, timestamp) VALUES (?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), d_str, sample_weights[i], sample_fats[i], f"{d_str} 07:15:00")
+        )
+
+        w_item = workout_plan[i]
+        cursor.execute(
+            """INSERT INTO workout_logs 
+               (id, workout_type, menu_name, duration_minutes, weight, reps, sets, note, log_date, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (str(uuid.uuid4()), w_item[0], w_item[1], w_item[2], w_item[3], w_item[4], w_item[5], w_item[6], d_str, f"{d_str} 18:00:00")
+        )
+
+        cursor.execute(
+            "INSERT INTO training_logs (id, category, note, log_date, timestamp) VALUES (?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), f"{'ジム' if w_item[0] == 'gym' else '宅トレ'}: {w_item[1]}", w_item[6], d_str, f"{d_str} 18:00:00")
+        )
+
+        for m_item in daily_meals_plan[i]:
+            m_time, m_name, cal, p_g, f_g, c_g, fib_g, s_g = m_item
+            p_lvl = "高" if p_g >= 20 else "普通"
+            c_lvl = "低" if c_g <= 30 else "普通"
+            f_lvl = "低" if f_g <= 15 else "普通"
+            cursor.execute(
+                """INSERT INTO meal_logs 
+                   (id, meal_type, meal_time, menu_name, calories, protein_level, carbs_level, fat_level, protein_g, fat_g, carbs_g, fiber_g, salt_g, analysis_json, image_url, note, log_date, timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(uuid.uuid4()),
+                    m_time,
+                    m_time,
+                    m_name,
+                    cal,
+                    p_lvl,
+                    c_lvl,
+                    f_lvl,
+                    p_g,
+                    f_g,
+                    c_g,
+                    fib_g,
+                    s_g,
+                    "",
+                    "",
+                    "1週間サンプルデータ",
+                    d_str,
+                    f"{d_str} {m_time}:00"
+                )
+            )
+
+    conn.commit()
+    conn.close()
+    return {"success": True, "streak_days": 7, "is_logged_today": True}
+
+@app.post("/api/demo/reset")
+def reset_all_demo_data():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM training_logs")
+    cursor.execute("DELETE FROM workout_logs")
+    cursor.execute("DELETE FROM meal_logs")
+    cursor.execute("DELETE FROM body_metrics")
+    cursor.execute("DELETE FROM body_analysis_results")
+    conn.commit()
+    conn.close()
+    return {"success": True, "streak_days": 0, "is_logged_today": False}
+
+@app.get("/api/network-info")
+def get_network_info():
+    import socket
+    lan_ip = "192.168.1.10"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        try:
+            lan_ip = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            pass
+    return {"lan_ip": lan_ip}
+
+class GeminiProxyInput(BaseModel):
+    prompt: str
+    base64Data: str | None = None
+    mimeType: str | None = "image/jpeg"
+
+@app.post("/api/gemini")
+async def proxy_gemini_call(body: GeminiProxyInput):
+    gemini_key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if not gemini_key or not body.prompt:
+        return {"success": False, "fallback": True}
+    try:
+        import urllib.request
+        parts = [{"text": body.prompt}]
+        if body.base64Data:
+            parts.append({
+                "inlineData": {
+                    "mimeType": body.mimeType or "image/jpeg",
+                    "data": body.base64Data
+                }
+            })
+        payload = json.dumps({
+            "contents": [{"parts": parts}],
+            "generationConfig": {"responseMimeType": "application/json"}
+        }).encode("utf-8")
+        for model_name in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+            req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    res_json = json.loads(resp.read().decode("utf-8"))
+                    raw_text = res_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    if raw_text:
+                        cleaned = raw_text.strip()
+                        if cleaned.startswith("```"):
+                            cleaned = cleaned.strip("`")
+                            if cleaned.startswith("json"):
+                                cleaned = cleaned[4:].strip()
+                        return {"success": True, "data": json.loads(cleaned)}
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return {"success": False, "fallback": True}

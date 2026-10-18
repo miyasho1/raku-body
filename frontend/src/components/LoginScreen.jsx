@@ -1,16 +1,8 @@
 import React, { useState } from 'react';
-import { getUserGeminiCredentials, saveUserGeminiCredentials } from '../utils/geminiAnalyzer';
 
-const HTTPS_PREFIX = ['https:', ''].join('/');
-const GEMINI_OAUTH_SCOPE = [
-  'openid',
-  'email',
-  'profile',
-  [HTTPS_PREFIX, 'www.googleapis.com', 'auth', 'generative-language.retriever'].join('/'),
-  [HTTPS_PREFIX, 'www.googleapis.com', 'auth', 'cloud-platform'].join('/')
-].join(' ');
+const LAB_PASSCODE = '2026';
 
-const PRESET_GOOGLE_ACCOUNTS = [
+const PRESET_ACCOUNTS = [
   {
     id: 'acc_1',
     name: '山田 健太',
@@ -28,140 +20,80 @@ const PRESET_GOOGLE_ACCOUNTS = [
 ];
 
 export default function LoginScreen({ onLoginSuccess }) {
-  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
-  const [isCustomAccountMode, setIsCustomAccountMode] = useState(false);
-  const [customName, setCustomName] = useState('');
-  const [customEmail, setCustomEmail] = useState('');
-  const [customError, setCustomError] = useState('');
+  const [isPasscodeUnlocked, setIsPasscodeUnlocked] = useState(() => {
+    try {
+      return localStorage.getItem('raku_lab_passcode_verified') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [passcodeInput, setPasscodeInput] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
+
+  const [selectedAccountIdx, setSelectedAccountIdx] = useState(0);
   const [demoEmail, setDemoEmail] = useState('');
   const [demoEmailError, setDemoEmailError] = useState('');
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [authStatusText, setAuthStatusText] = useState('認証中...');
 
-  const completeLogin = (userPayload, statusLabel = '認証中...') => {
-    const existingCreds = getUserGeminiCredentials(userPayload.email);
-    const mergedToken = userPayload.accessToken || existingCreds.accessToken || '';
-    const mergedKey = userPayload.apiKey || existingCreds.personalApiKey || '';
-
-    if (userPayload.email && (mergedToken || mergedKey)) {
-      saveUserGeminiCredentials(userPayload.email, {
-        accessToken: mergedToken,
-        personalApiKey: mergedKey
-      });
-    }
-
-    const finalUser = {
-      ...userPayload,
-      accessToken: mergedToken,
-      apiKey: mergedKey
-    };
-
-    setAuthStatusText(statusLabel);
-    setIsAuthenticating(true);
-    setTimeout(() => {
-      setIsAuthenticating(false);
-      onLoginSuccess(finalUser);
-    }, 650);
-  };
-
-  const handleGoogleLoginClick = () => {
-    const clientId = localStorage.getItem('raku_google_client_id') || '';
-    if (clientId && window.google && window.google.accounts && window.google.accounts.oauth2) {
+  const verifyPasscodeValue = (val) => {
+    if (val.trim() === LAB_PASSCODE) {
       try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: GEMINI_OAUTH_SCOPE,
-          callback: async (response) => {
-            if (response && response.access_token) {
-              const oauthAccessToken = response.access_token;
-              setAuthStatusText('Googleアカウント＆Gemini権限を取得中...');
-              setIsAuthenticating(true);
-              try {
-                const userInfoEndpoint = [HTTPS_PREFIX, 'www.googleapis.com', 'oauth2', 'v3', 'userinfo'].join('/');
-                const res = await fetch(userInfoEndpoint, {
-                  headers: { Authorization: `Bearer ${oauthAccessToken}` }
-                });
-                if (res.ok) {
-                  const profile = await res.json();
-                  const userEmail = profile.email || 'user@gmail.com';
-                  const existing = getUserGeminiCredentials(userEmail);
-                  saveUserGeminiCredentials(userEmail, {
-                    accessToken: oauthAccessToken,
-                    personalApiKey: existing.personalApiKey
-                  });
-                  completeLogin({
-                    name: profile.name || 'Google ユーザー',
-                    email: userEmail,
-                    avatarUrl: profile.picture || '',
-                    accessToken: oauthAccessToken,
-                    apiKey: existing.personalApiKey,
-                    authProvider: 'google'
-                  }, 'Google OAuth & Gemini連携完了...');
-                  return;
-                }
-              } catch {
-              }
-              const fallbackEmail = 'authenticated.user@gmail.com';
-              saveUserGeminiCredentials(fallbackEmail, { accessToken: oauthAccessToken });
-              completeLogin({
-                name: 'Google 認証ユーザー',
-                email: fallbackEmail,
-                avatarUrl: '',
-                accessToken: oauthAccessToken,
-                authProvider: 'google'
-              });
-            }
-          }
-        });
-        tokenClient.requestAccessToken();
-        return;
+        localStorage.setItem('raku_lab_passcode_verified', 'true');
       } catch {
       }
+      setPasscodeError('');
+      setIsPasscodeUnlocked(true);
+      return true;
     }
-    setIsCustomAccountMode(false);
-    setCustomError('');
-    setIsGoogleModalOpen(true);
+    return false;
   };
 
-  const handleSelectPresetGoogle = (acc) => {
-    setIsGoogleModalOpen(false);
-    const savedCreds = getUserGeminiCredentials(acc.email);
-    completeLogin({
+  const handlePasscodeChange = (e) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+    setPasscodeInput(val);
+    if (passcodeError) setPasscodeError('');
+    if (val.length === 4) {
+      verifyPasscodeValue(val);
+    }
+  };
+
+  const handlePasscodeSubmit = (e) => {
+    e.preventDefault();
+    if (!verifyPasscodeValue(passcodeInput)) {
+      setPasscodeError('招待パスコードが正しくありません（研究室指定の4桁を入力してください）');
+    }
+  };
+
+  const handleRelockPasscode = () => {
+    try {
+      localStorage.removeItem('raku_lab_passcode_verified');
+    } catch {
+    }
+    setPasscodeInput('');
+    setPasscodeError('');
+    setIsPasscodeUnlocked(false);
+  };
+
+  const handleOneTapGoogleLogin = () => {
+    const acc = PRESET_ACCOUNTS[selectedAccountIdx] || PRESET_ACCOUNTS[0];
+    onLoginSuccess({
       name: acc.name,
       email: acc.email,
       avatarUrl: '',
       initial: acc.initial,
       bgColor: acc.bgColor,
-      accessToken: savedCreds.accessToken,
-      apiKey: savedCreds.personalApiKey,
       authProvider: 'google'
-    }, `${acc.name} さんのGoogleアカウントで認証中...`);
+    });
   };
 
-  const handleCustomGoogleSubmit = (e) => {
-    e.preventDefault();
-    const trimmedName = customName.trim();
-    const trimmedEmail = customEmail.trim();
-    if (!trimmedName) {
-      setCustomError('名前を入力してください');
-      return;
-    }
-    if (!trimmedEmail || !trimmedEmail.includes('@')) {
-      setCustomError('有効なメールアドレスを入力してください');
-      return;
-    }
-    setIsGoogleModalOpen(false);
-    const savedCreds = getUserGeminiCredentials(trimmedEmail);
-    completeLogin({
-      name: trimmedName,
-      email: trimmedEmail,
+  const handleGuestLogin = () => {
+    onLoginSuccess({
+      name: 'ゲストユーザー',
+      email: 'guest@rakubody.app',
       avatarUrl: '',
-      initial: trimmedName.charAt(0).toUpperCase(),
-      bgColor: 'bg-indigo-600',
-      accessToken: savedCreds.accessToken,
-      apiKey: savedCreds.personalApiKey,
-      authProvider: 'google'
-    }, 'Googleアカウントで認証中...');
+      initial: 'G',
+      bgColor: 'bg-slate-600',
+      authProvider: 'guest'
+    });
   };
 
   const handleEmailLoginSubmit = (e) => {
@@ -173,175 +105,170 @@ export default function LoginScreen({ onLoginSuccess }) {
     }
     setDemoEmailError('');
     const localPart = trimmed.split('@')[0] || 'ユーザー';
-    const savedCreds = getUserGeminiCredentials(trimmed);
-    completeLogin({
+    onLoginSuccess({
       name: localPart,
       email: trimmed,
       avatarUrl: '',
       initial: localPart.charAt(0).toUpperCase(),
-      bgColor: 'bg-slate-700',
-      accessToken: savedCreds.accessToken,
-      apiKey: savedCreds.personalApiKey,
+      bgColor: 'bg-indigo-600',
       authProvider: 'email'
-    }, 'メールアドレスで認証中...');
-  };
-
-  const handleGuestLogin = () => {
-    const guestEmail = 'guest@rakubody.app';
-    const savedCreds = getUserGeminiCredentials(guestEmail);
-    completeLogin({
-      name: 'ゲストユーザー',
-      email: guestEmail,
-      avatarUrl: '',
-      initial: 'G',
-      bgColor: 'bg-slate-500',
-      accessToken: savedCreds.accessToken,
-      apiKey: savedCreds.personalApiKey,
-      authProvider: 'guest'
-    }, 'ゲスト環境を準備中...');
+    });
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 pt-4 pb-10 flex flex-col justify-between bg-slate-100 relative no-scrollbar [&::-webkit-scrollbar]:hidden">
-      <div className="space-y-5">
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 text-center relative overflow-hidden">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/5 rounded-full pointer-events-none" />
-          <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-indigo-500/5 rounded-full pointer-events-none" />
-
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md flex items-center justify-center font-black text-3xl mx-auto mb-3.5 tracking-tight">
-            R
+    <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3.5 flex flex-col justify-between bg-slate-100 no-scrollbar [&::-webkit-scrollbar]:hidden space-y-3.5">
+      <div className="space-y-3.5">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 text-center space-y-3">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-sm flex items-center justify-center font-black text-xl tracking-tight shrink-0">
+              R
+            </div>
+            <div className="text-left">
+              <h1 className="text-xl font-black text-slate-900 tracking-tight leading-tight">
+                らくボディ
+              </h1>
+              <p className="text-[11px] font-bold text-blue-600 tracking-tight">
+                AI栄養分析 × かんたん習慣化ボディメイク
+              </p>
+            </div>
           </div>
 
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            らくボディ
-          </h1>
-          <p className="text-xs font-bold text-blue-600 mt-1 tracking-tight">
-            AI栄養分析 × かんたん習慣化ボディメイク
-          </p>
-
-          <div className="grid grid-cols-1 gap-2 mt-5 text-left">
-            <div className="flex items-center gap-3 bg-slate-50/90 px-3.5 py-2.5 rounded-2xl border border-slate-200/70">
-              <span className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200/60 flex items-center justify-center text-base flex-shrink-0">
+          <div className="grid grid-cols-3 gap-2.5 text-center">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1">
+              <span className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/60 flex items-center justify-center text-xs">
                 📸
               </span>
-              <div className="min-w-0">
-                <div className="text-xs font-extrabold text-slate-800">AI食事・体型画像解析</div>
-                <div className="text-[10px] text-slate-500">ログインしたGoogleアカウントのGemini権限で高精度推論</div>
-              </div>
+              <span className="text-[11px] font-extrabold text-slate-800 leading-tight">AI画像解析</span>
+              <span className="text-[9px] text-slate-500 leading-tight">食事・体型診断</span>
             </div>
 
-            <div className="flex items-center gap-3 bg-slate-50/90 px-3.5 py-2.5 rounded-2xl border border-slate-200/70">
-              <span className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-base flex-shrink-0">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1">
+              <span className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-xs">
                 💪
               </span>
-              <div className="min-w-0">
-                <div className="text-xs font-extrabold text-slate-800">直感的なジム・宅トレ記録</div>
-                <div className="text-[10px] text-slate-500">ドラムロール＆インターバルタイマーで快適記録</div>
-              </div>
+              <span className="text-[11px] font-extrabold text-slate-800 leading-tight">ジム・宅トレ</span>
+              <span className="text-[9px] text-slate-500 leading-tight">直感ピッカー記録</span>
             </div>
 
-            <div className="flex items-center gap-3 bg-slate-50/90 px-3.5 py-2.5 rounded-2xl border border-slate-200/70">
-              <span className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-base flex-shrink-0">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1">
+              <span className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/60 flex items-center justify-center text-xs">
                 📊
               </span>
-              <div className="min-w-0">
-                <div className="text-xs font-extrabold text-slate-800">5角形チャート総合分析</div>
-                <div className="text-[10px] text-slate-500">栄養バランスと体重・BMI推移を一目で可視化</div>
-              </div>
+              <span className="text-[11px] font-extrabold text-slate-800 leading-tight">週間通信簿</span>
+              <span className="text-[9px] text-slate-500 leading-tight">未来体重予測</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200/80 space-y-4">
-          <div className="text-center">
-            <h2 className="text-sm font-extrabold text-slate-900">Googleアカウントで始める</h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              あなたのGoogleアカウントのGemini AIと連携して解析します
-            </p>
-          </div>
+        {!isPasscodeUnlocked ? (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-200/90 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg">
+                🛡️ 研究室実証テスト・メンバー限定ゲート
+              </span>
+              <span className="text-[10px] font-bold text-slate-400">初回のみ入力</span>
+            </div>
 
-          <button
-            type="button"
-            onClick={handleGoogleLoginClick}
-            className="w-full py-3.5 px-4 bg-white border border-slate-300 rounded-2xl shadow-sm font-bold text-slate-800 hover:bg-slate-50 active:scale-98 flex items-center justify-center gap-3 cursor-pointer transition-all text-sm"
-          >
-            <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            <span>Googleで続ける</span>
-          </button>
+            <div className="text-left space-y-1">
+              <h2 className="text-sm font-extrabold text-slate-900">
+                招待パスコードを入力してロック解除
+              </h2>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                部外者アクセス防止のため、研究室メンバー専用の4桁パスコードを入力してください（一度解除すると次回から自動スキップされます）。
+              </p>
+            </div>
 
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-slate-200" />
-            <span className="flex-shrink mx-3 text-[11px] font-bold text-slate-400">または</span>
-            <div className="flex-grow border-t border-slate-200" />
-          </div>
-
-          <form onSubmit={handleEmailLoginSubmit} className="space-y-2.5">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                メールアドレスでログイン（デモ用）
-              </label>
-              <div className="flex gap-2">
+            <form onSubmit={handlePasscodeSubmit} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-3">
+              <div className="flex items-center gap-2.5">
                 <input
-                  type="email"
-                  value={demoEmail}
-                  onChange={(e) => {
-                    setDemoEmail(e.target.value);
-                    if (demoEmailError) setDemoEmailError('');
-                  }}
-                  placeholder="example@email.com"
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={passcodeInput}
+                  onChange={handlePasscodeChange}
+                  placeholder="4桁パスコード"
+                  className="flex-1 bg-white border border-slate-300 focus:border-indigo-600 rounded-xl px-3.5 py-2.5 text-center text-base font-black tracking-[0.35em] text-slate-900 focus:outline-none tabular-nums"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-xs transition-colors cursor-pointer flex-shrink-0"
+                  className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all cursor-pointer shrink-0"
                 >
-                  ログイン
+                  ロック解除
                 </button>
               </div>
-              {demoEmailError && (
-                <p className="text-[11px] text-rose-600 font-semibold mt-1">{demoEmailError}</p>
+
+              {passcodeError && (
+                <p className="text-[11px] text-rose-600 font-bold text-center">
+                  {passcodeError}
+                </p>
               )}
+
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/70">
+                <span className="text-[10px] text-slate-500 font-medium">
+                  ※ 研究室テスト用パスコード: <strong className="text-slate-700 font-extrabold">2026</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => verifyPasscodeValue(LAB_PASSCODE)}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                >
+                  ワンタップで2026を入力
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="text-left">
+                <h2 className="text-sm font-extrabold text-slate-900">ワンタップでシンプルに始める</h2>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  初期設定なしで今すぐトレーニング＆食事記録を開始
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRelockPasscode}
+                className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-1 rounded-lg cursor-pointer shrink-0"
+                title="パスコードロック画面へ戻す"
+              >
+                🔓 招待認証済
+              </button>
             </div>
-          </form>
 
-          <button
-            type="button"
-            onClick={handleGuestLogin}
-            className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-bold rounded-2xl border border-slate-200/80 text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <span>🚀</span>
-            <span>ゲストとしてすぐ始める</span>
-          </button>
-        </div>
-      </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {PRESET_ACCOUNTS.map((acc, idx) => {
+                const isSelected = selectedAccountIdx === idx;
+                return (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => setSelectedAccountIdx(idx)}
+                    className={`p-3 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-50/80 border-blue-500 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-lg ${acc.bgColor} text-white flex items-center justify-center font-bold text-xs shrink-0`}>
+                      {acc.initial}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-extrabold text-slate-900 truncate">{acc.name}</div>
+                      <div className="text-[9px] text-slate-500 truncate">{acc.email}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-      <p className="text-[10px] text-slate-400 text-center mt-5">
-        ログインすることで、利用規約およびプライバシーポリシーに同意したものとみなされます。
-      </p>
-
-      {isGoogleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl border border-slate-200/90 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={handleOneTapGoogleLogin}
+                className="py-3 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-sm font-bold active:scale-98 flex items-center justify-center gap-2 cursor-pointer transition-all text-xs"
+              >
+                <svg className="w-4 h-4 shrink-0 bg-white rounded-full p-0.5" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -359,148 +286,74 @@ export default function LoginScreen({ onLoginSuccess }) {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                <span className="text-xs font-bold text-slate-600">Google でログイン</span>
-              </div>
+                <span>ワンタップ開始</span>
+              </button>
+
               <button
                 type="button"
-                onClick={() => setIsGoogleModalOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold cursor-pointer"
+                onClick={handleGuestLogin}
+                className="py-3 px-3 bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-bold rounded-xl border border-slate-200/80 text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
-                ✕
+                <span>🚀</span>
+                <span>ゲストで始める</span>
               </button>
             </div>
 
-            {!isCustomAccountMode ? (
-              <div className="pt-4 space-y-3">
-                <div className="text-center mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-lg mx-auto mb-2 shadow-xs">
-                    R
-                  </div>
-                  <h3 className="text-base font-extrabold text-slate-900">アカウントの選択</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    「<span className="font-bold text-slate-700">らくボディ</span>」に移動し、そのアカウントのGemini設定を引き継ぎます
-                  </p>
-                </div>
-
-                <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-2xl overflow-hidden bg-slate-50/50">
-                  {PRESET_GOOGLE_ACCOUNTS.map((acc) => {
-                    const creds = getUserGeminiCredentials(acc.email);
-                    const hasGemini = Boolean(creds.accessToken || creds.personalApiKey);
-                    return (
-                      <button
-                        key={acc.id}
-                        type="button"
-                        onClick={() => handleSelectPresetGoogle(acc)}
-                        className="w-full p-3.5 flex items-center gap-3 hover:bg-blue-50/60 transition-colors text-left cursor-pointer bg-white"
-                      >
-                        <div className={`w-9 h-9 rounded-full ${acc.bgColor} text-white flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-xs`}>
-                          {acc.initial}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-extrabold text-slate-900 truncate">{acc.name}</span>
-                            {hasGemini && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Gemini連携済
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-500 truncate">{acc.email}</div>
-                        </div>
-                        <span className="text-xs text-slate-400">›</span>
-                      </button>
-                    );
-                  })}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCustomAccountMode(true);
-                      setCustomError('');
-                    }}
-                    className="w-full p-3.5 flex items-center gap-3 hover:bg-slate-100 transition-colors text-left cursor-pointer bg-white"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center text-sm flex-shrink-0">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    </div>
-                    <div className="text-xs font-bold text-slate-700">別のアカウントを使用</div>
-                  </button>
-                </div>
-
-                <p className="text-[10px] text-slate-400 leading-relaxed pt-1">
-                  続行すると、選択したGoogleアカウントに紐づくGemini認証情報（OAuthトークン・パーソナルAPIキー）が自動的に適用されます。
-                </p>
+            <form onSubmit={handleEmailLoginSubmit} className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-slate-600 shrink-0">メール:</span>
+                <input
+                  type="email"
+                  value={demoEmail}
+                  onChange={(e) => {
+                    setDemoEmail(e.target.value);
+                    if (demoEmailError) setDemoEmailError('');
+                  }}
+                  placeholder="example@email.com"
+                  className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs shadow-2xs transition-colors cursor-pointer shrink-0"
+                >
+                  ログイン
+                </button>
               </div>
-            ) : (
-              <form onSubmit={handleCustomGoogleSubmit} className="pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-extrabold text-slate-900">別のGoogleアカウントで続行</h3>
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomAccountMode(false)}
-                    className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
-                  >
-                    一覧に戻る
-                  </button>
-                </div>
+              {demoEmailError && (
+                <p className="text-[11px] text-rose-600 font-semibold">{demoEmailError}</p>
+              )}
+            </form>
+          </div>
+        )}
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">お名前（表示名）</label>
-                  <input
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="例: 鈴木 一郎"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Gmailアドレス</label>
-                  <input
-                    type="email"
-                    value={customEmail}
-                    onChange={(e) => setCustomEmail(e.target.value)}
-                    placeholder="example@gmail.com"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                {customError && (
-                  <p className="text-[11px] text-rose-600 font-semibold">{customError}</p>
-                )}
-
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomAccountMode(false)}
-                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
-                  >
-                    戻る
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-sm cursor-pointer"
-                  >
-                    ログイン
-                  </button>
-                </div>
-              </form>
-            )}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-slate-800">🛡️ プライバシー＆端末内ローカル保護設計</span>
+            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
+              標準搭載
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70">
+              <span className="text-[11px] font-bold text-slate-800 block">顔領域18%自動カット</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">体型写真の上部を自動トリミング</span>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70">
+              <span className="text-[11px] font-bold text-slate-800 block">元画像のメモリ即破棄</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">解析後は数値とテキストのみ保存</span>
+            </div>
+          </div>
+          <div className="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-200/80 text-center">
+            <p className="text-[11px] font-bold text-emerald-900 leading-relaxed">
+              🔒 記録データはお使いの端末内にのみ保存され、他のユーザーや外部に共有されることはありません
+            </p>
           </div>
         </div>
-      )}
+      </div>
 
-      {isAuthenticating && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl px-7 py-6 shadow-2xl border border-slate-100 flex flex-col items-center gap-3">
-            <div className="w-9 h-9 rounded-full border-3 border-blue-600 border-t-transparent animate-spin" />
-            <span className="text-xs font-extrabold text-slate-800">{authStatusText}</span>
-          </div>
-        </div>
-      )}
+      <p className="text-[10px] text-slate-500 font-semibold text-center py-1">
+        🔒 記録データはお使いの端末内にのみ保存され、他のユーザーや外部に共有されることはありません
+      </p>
     </div>
   );
 }

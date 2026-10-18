@@ -13,9 +13,12 @@ export default function WheelPicker({
 }) {
   const containerRef = useRef(null);
 
+  const getItemValue = (item) => (item !== null && typeof item === 'object' && 'value' in item ? item.value : item);
+  const getItemLabel = (item) => (item !== null && typeof item === 'object' && 'label' in item ? item.label : item);
+
   useEffect(() => {
     if (containerRef.current) {
-      const idx = items.indexOf(value);
+      const idx = items.findIndex((it) => getItemValue(it) === value);
       if (idx !== -1) {
         containerRef.current.scrollTop = idx * itemHeight;
       }
@@ -25,8 +28,9 @@ export default function WheelPicker({
   const handleScroll = (e) => {
     const idx = Math.round(e.target.scrollTop / itemHeight);
     if (idx >= 0 && idx < items.length) {
-      if (items[idx] !== value) {
-        onChange(items[idx]);
+      const nextVal = getItemValue(items[idx]);
+      if (nextVal !== value) {
+        onChange(nextVal);
       }
     }
   };
@@ -38,7 +42,7 @@ export default function WheelPicker({
         behavior: 'smooth'
       });
     }
-    onChange(item);
+    onChange(getItemValue(item));
   };
 
   const numericHeight = parseInt(height.replace(/\D/g, '') || '190', 10);
@@ -58,19 +62,27 @@ export default function WheelPicker({
         className="h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth"
       >
         {items.map((item, idx) => {
-          const isSelected = item === value;
+          const itemVal = getItemValue(item);
+          const itemLabel = getItemLabel(item);
+          const isSelected = itemVal === value;
           return (
             <div
               key={idx}
               onClick={() => handleItemClick(item, idx)}
               style={{ height: `${itemHeight}px` }}
-              className={`snap-center flex items-center ${textAlign === 'right' || textAlign === 'end' ? 'justify-end' : textAlign === 'left' || textAlign === 'start' ? 'justify-start' : 'justify-center'} px-1 cursor-pointer transition-colors tabular-nums ${
+              className={`snap-center flex items-center ${
+                textAlign === 'right' || textAlign === 'end'
+                  ? 'justify-end'
+                  : textAlign === 'left' || textAlign === 'start'
+                  ? 'justify-start'
+                  : 'justify-center'
+              } px-1.5 cursor-pointer transition-colors tabular-nums ${
                 isSelected
-                  ? `text-[#1A1A1C] ${fontSize} font-bold tracking-tight`
-                  : `text-[#98A2B3] hover:text-[#475467] ${subFontSize} font-medium`
+                  ? `text-slate-900 ${fontSize} font-bold tracking-tight`
+                  : `text-slate-400 hover:text-slate-600 ${subFontSize} font-medium`
               }`}
             >
-              <span>{item}</span>
+              <span>{itemLabel}</span>
             </div>
           );
         })}

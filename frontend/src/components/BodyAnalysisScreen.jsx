@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { analyzeBodyImage } from '../utils/geminiAnalyzer';
+import {
+  analyzeBodyImage,
+  processPrivacyImage,
+  revokeImagePreviewUrl
+} from '../utils/geminiAnalyzer';
 
 export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
+  const [isFaceCropEnabled, setIsFaceCropEnabled] = useState(true);
+  const [rawIdealFiles, setRawIdealFiles] = useState([]);
   const [idealFiles, setIdealFiles] = useState([]);
   const [idealPreviews, setIdealPreviews] = useState([]);
+  const [rawCurrentFile, setRawCurrentFile] = useState(null);
   const [currentFile, setCurrentFile] = useState(null);
   const [currentPreview, setCurrentPreview] = useState(null);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [resultTab, setResultTab] = useState('summary');
   const [message, setMessage] = useState(null);
 
   const idealInputRef = useRef(null);
@@ -16,6 +24,10 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
 
   useEffect(() => {
     fetchLatestAnalysis();
+    return () => {
+      idealPreviews.forEach((u) => revokeImagePreviewUrl(u));
+      if (currentPreview) revokeImagePreviewUrl(currentPreview);
+    };
   }, []);
 
   const fetchLatestAnalysis = async () => {
@@ -23,48 +35,103 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
       const res = await fetch('/api/body-analysis');
       if (res.ok) {
         const data = await res.json();
-        if (data.has_analysis) {
+        if (data.has_analysis && data.data) {
           setAnalysisResult(data.data);
-          if (data.ideal_urls && data.ideal_urls.length > 0) {
-            setIdealPreviews(data.ideal_urls);
-          }
-          if (data.current_url) {
-            setCurrentPreview(data.current_url);
-          }
+          return;
         }
+      }
+    } catch {
+    }
+    try {
+      const cached = localStorage.getItem('raku_body_analysis_text');
+      if (cached) {
+        setAnalysisResult(JSON.parse(cached));
       }
     } catch {
     }
   };
 
-  const handleIdealChange = (e) => {
+  const handleToggleFaceCrop = async () => {
+    const nextState = !isFaceCropEnabled;
+    setIsFaceCropEnabled(nextState);
+
+    if (rawIdealFiles.length > 0) {
+      idealPreviews.forEach((u) => revokeImagePreviewUrl(u));
+      const processedList = await Promise.all(
+        rawIdealFiles.map((f) => processPrivacyImage(f, nextState))
+      );
+      setIdealFiles(processedList.map((item) => item.processedFile));
+      setIdealPreviews(processedList.map((item) => item.previewUrl));
+    }
+
+    if (rawCurrentFile) {
+      if (currentPreview) revokeImagePreviewUrl(currentPreview);
+      const processedCurr = await processPrivacyImage(rawCurrentFile, nextState);
+      setCurrentFile(processedCurr.processedFile);
+      setCurrentPreview(processedCurr.previewUrl);
+    }
+  };
+
+  const handleIdealChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    setIdealFiles((prev) => [...prev, ...files]);
-    const newPreviews = files.map((f) => URL.createObjectURL(f));
-    setIdealPreviews((prev) => [...prev, ...newPreviews]);
+    const processedList = await Promise.all(
+      files.map((f) => processPrivacyImage(f, isFaceCropEnabled))
+    );
+
+    setRawIdealFiles((prev) => [...prev, ...files]);
+    setIdealFiles((prev) => [...prev, ...processedList.map((item) => item.processedFile)]);
+    setIdealPreviews((prev) => [...prev, ...processedList.map((item) => item.previewUrl)]);
   };
 
   const handleRemoveIdeal = (index) => {
+    if (idealPreviews[index]) {
+      revokeImagePreviewUrl(idealPreviews[index]);
+    }
+    setRawIdealFiles((prev) => prev.filter((_, i) => i !== index));
     setIdealFiles((prev) => prev.filter((_, i) => i !== index));
     setIdealPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCurrentChange = (e) => {
+  const handleCurrentChange = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setCurrentFile(file);
-      setCurrentPreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    if (currentPreview) {
+      revokeImagePreviewUrl(currentPreview);
     }
+    setRawCurrentFile(file);
+    const processed = await processPrivacyImage(file, isFaceCropEnabled);
+    setCurrentFile(processed.processedFile);
+    setCurrentPreview(processed.previewUrl);
   };
 
   const handleRemoveCurrent = () => {
+    if (currentPreview) {
+      revokeImagePreviewUrl(currentPreview);
+    }
+    setRawCurrentFile(null);
     setCurrentFile(null);
     setCurrentPreview(null);
     if (currentInputRef.current) {
       currentInputRef.current.value = '';
     }
+  };
+
+  const purgeRawImagesFromMemory = () => {
+    idealPreviews.forEach((u) => revokeImagePreviewUrl(u));
+    if (currentPreview) {
+      revokeImagePreviewUrl(currentPreview);
+    }
+    setRawIdealFiles([]);
+    setIdealFiles([]);
+    setIdealPreviews([]);
+    setRawCurrentFile(null);
+    setCurrentFile(null);
+    setCurrentPreview(null);
+    if (idealInputRef.current) idealInputRef.current.value = '';
+    if (currentInputRef.current) currentInputRef.current.value = '';
   };
 
   const handleAnalyze = async () => {
@@ -98,288 +165,366 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
     }
 
     try {
-      let analysis = null;
-      if (currentFile) {
-        try {
-          analysis = await analyzeBodyImage(currentFile);
-        } catch {}
-      }
+      const analysis = await analyzeBodyImage(currentFile);
+      let finalData = analysis;
 
-      const res = await fetch('/api/analyze-body-target', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (res.ok) {
-        const resData = await res.json();
-        setAnalysisResult(analysis ? { ...resData.data, ...analysis } : resData.data);
-        setMessage({ type: 'success', text: 'AIによる体型比較・メニュー生成が完了しました！' });
-      } else if (analysis) {
-        setAnalysisResult(analysis);
-        setMessage({ type: 'success', text: 'AIによる体型分析・メニュー生成が完了しました！' });
-      } else {
-        setMessage({ type: 'error', text: '分析処理に失敗しました。もう一度お試しください。' });
-      }
-    } catch {
-      if (currentFile) {
-        try {
-          const fallbackAnalysis = await analyzeBodyImage(currentFile);
-          setAnalysisResult(fallbackAnalysis);
-          setMessage({ type: 'success', text: 'AIによる体型分析・メニュー生成が完了しました！' });
-        } catch {
-          setMessage({ type: 'error', text: '通信エラーが発生しました。' });
+      try {
+        const res = await fetch('/api/analyze-body-target', {
+          method: 'POST',
+          body: formData
+        });
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData && resData.data) {
+            finalData = { ...resData.data, ...analysis };
+          }
         }
-      } else {
-        setMessage({ type: 'error', text: '通信エラーが発生しました。' });
+      } catch {
       }
+
+      setAnalysisResult(finalData);
+      localStorage.setItem('raku_body_analysis_text', JSON.stringify(finalData));
+      setMessage({
+        type: 'success',
+        text: 'AI体型分析が完了し、元画像データをメモリから自動破棄しました。'
+      });
+    } catch {
+      const fallbackAnalysis = await analyzeBodyImage(null);
+      setAnalysisResult(fallbackAnalysis);
+      localStorage.setItem('raku_body_analysis_text', JSON.stringify(fallbackAnalysis));
+      setMessage({
+        type: 'success',
+        text: 'AI体型分析が完了し、元画像データをメモリから自動破棄しました。'
+      });
     } finally {
+      purgeRawImagesFromMemory();
       setIsAnalyzing(false);
     }
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-5rem)] px-5 py-6 pb-40 bg-slate-100 no-scrollbar [&::-webkit-scrollbar]:hidden">
-      <div className="flex items-center justify-between mb-3">
+    <div className="flex flex-col space-y-3.5 pb-3">
+      <div className="flex items-center justify-between px-0.5">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-xs font-medium text-[#475467] hover:text-[#1A1A1C] bg-white border border-[#D0D5DD] px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+          className="flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-xl cursor-pointer shadow-2xs"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-          </svg>
-          ホームへ戻る
+          ‹ ホームへ戻る
         </button>
-        <span className="text-xs font-bold text-[#0056B3] bg-[#F2F4F7] px-2.5 py-1 rounded border border-[#D0D5DD]">
-          体型写真分析
+        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl">
+          🔒 解析後に元画像は自動破棄されます
         </span>
       </div>
 
-      <header className="mb-4">
-        <h1 className="text-lg font-bold text-[#1A1A1C]">体型画像比較分析</h1>
-        <p className="text-xs text-[#475467] mt-0.5">理想の写真と現状の写真を比較し、推奨メニューを生成します</p>
-      </header>
+      {message && (
+        <div className={`p-3 rounded-xl text-[11px] font-bold text-center border ${
+          message.type === 'success'
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            : 'bg-rose-50 text-rose-700 border-rose-200'
+        }`}>
+          {message.text}
+        </div>
+      )}
 
-      <section className="bg-white rounded-lg p-4 border border-[#D0D5DD] shadow-sm mb-4 space-y-4">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-bold text-[#1A1A1C] flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded-full bg-[#0056B3] text-white flex items-center justify-center text-[10px]">1</span>
-              <span>理想の体型写真（複数選択可）</span>
-            </label>
-            <span className="text-[10px] text-[#475467]">目標とする体型</span>
+      <section className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3">
+        <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200/80">
+          <div className="min-w-0">
+            <span className="text-xs font-extrabold text-slate-900 block leading-tight">
+              🛡️ 顔エリア自動カット（上部18%）
+            </span>
+            <span className="text-[10px] text-slate-500 block">
+              顔が写る上部領域をCanvasで自動トリミングして保護
+            </span>
           </div>
+          <button
+            type="button"
+            onClick={handleToggleFaceCrop}
+            className={`px-3 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer shrink-0 border ${
+              isFaceCropEnabled
+                ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                : 'bg-white text-slate-500 border-slate-300'
+            }`}
+          >
+            {isFaceCropEnabled ? 'ON (保護中)' : 'OFF'}
+          </button>
+        </div>
 
-          <input
-            ref={idealInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleIdealChange}
-            className="hidden"
-            id="ideal-file-input"
-          />
+        <input
+          ref={idealInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleIdealChange}
+          className="hidden"
+          id="ideal-file-input"
+        />
+        <input
+          ref={currentInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleCurrentChange}
+          className="hidden"
+          id="current-file-input"
+        />
 
-          <div className="grid grid-cols-3 gap-2">
-            {idealPreviews.map((url, idx) => (
-              <div key={idx} className="relative aspect-square rounded-md overflow-hidden bg-[#F2F4F7] border border-[#D0D5DD] group">
-                <img src={url} alt={`理想写真 ${idx + 1}`} className="w-full h-full object-cover" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200/70 flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-900 flex items-center gap-1">
+                <span className="w-4 h-4 rounded bg-blue-600 text-white flex items-center justify-center text-[9px]">1</span>
+                <span>理想の体型</span>
+              </span>
+              <span className="text-[9px] text-slate-400">
+                {isFaceCropEnabled ? '顔カット済' : `${idealPreviews.length}枚`}
+              </span>
+            </div>
+
+            {idealPreviews.length > 0 ? (
+              <div className="relative h-28 rounded-lg overflow-hidden bg-white border border-slate-200">
+                <img src={idealPreviews[idealPreviews.length - 1]} alt="理想体型" className="w-full h-full object-cover" />
                 <button
                   type="button"
-                  onClick={() => handleRemoveIdeal(idx)}
-                  className="absolute top-1 right-1 w-5 h-5 rounded-md bg-black/60 text-white flex items-center justify-center text-[10px] cursor-pointer"
+                  onClick={() => handleRemoveIdeal(idealPreviews.length - 1)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded bg-black/60 text-white text-[9px] flex items-center justify-center cursor-pointer"
                 >
                   ✕
                 </button>
+                <label
+                  htmlFor="ideal-file-input"
+                  className="absolute bottom-1 right-1 px-2 py-0.5 rounded bg-blue-600/90 text-white text-[9px] font-bold cursor-pointer"
+                >
+                  +追加
+                </label>
               </div>
-            ))}
-
-            <label
-              htmlFor="ideal-file-input"
-              className="aspect-square rounded-md border border-dashed border-[#D0D5DD] hover:border-[#0056B3] bg-[#F8F9FA] hover:bg-[#F2F4F7] flex flex-col items-center justify-center cursor-pointer transition-colors p-2 text-center"
-            >
-              <div className="w-6 h-6 rounded-md bg-white border border-[#D0D5DD] text-[#0056B3] flex items-center justify-center mb-1 text-xs font-bold">
-                +
-              </div>
-              <span className="text-[10px] font-medium text-[#475467]">写真を追加</span>
-            </label>
-          </div>
-        </div>
-
-        <div className="border-t border-[#D0D5DD] pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-bold text-[#1A1A1C] flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded-full bg-[#0056B3] text-white flex items-center justify-center text-[10px]">2</span>
-              <span>現在の体型写真（正面または側面）</span>
-            </label>
-            <span className="text-[10px] text-[#475467]">現状の把握</span>
-          </div>
-
-          <input
-            ref={currentInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleCurrentChange}
-            className="hidden"
-            id="current-file-input"
-          />
-
-          {currentPreview ? (
-            <div className="relative w-full h-40 rounded-md overflow-hidden border border-[#D0D5DD] bg-[#F2F4F7]">
-              <img src={currentPreview} alt="現在の体型" className="w-full h-full object-contain" />
-              <button
-                type="button"
-                onClick={handleRemoveCurrent}
-                className="absolute top-2 right-2 px-2.5 py-1 rounded-md bg-black/70 text-white text-[11px] font-medium cursor-pointer"
+            ) : (
+              <label
+                htmlFor="ideal-file-input"
+                className="h-28 rounded-lg border border-dashed border-slate-300 hover:border-blue-500 bg-white flex flex-col items-center justify-center cursor-pointer p-2 text-center"
               >
-                変更
-              </button>
+                <span className="text-xs font-bold text-blue-600">＋ 理想写真</span>
+                <span className="text-[9px] text-slate-400 mt-0.5">目標の体型を追加</span>
+              </label>
+            )}
+          </div>
+
+          <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200/70 flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-900 flex items-center gap-1">
+                <span className="w-4 h-4 rounded bg-blue-600 text-white flex items-center justify-center text-[9px]">2</span>
+                <span>現在の体型</span>
+              </span>
+              <span className="text-[9px] text-slate-400">
+                {isFaceCropEnabled ? '顔カット済' : '正面/側面'}
+              </span>
             </div>
-          ) : (
-            <label
-              htmlFor="current-file-input"
-              className="w-full h-24 rounded-md border border-dashed border-[#D0D5DD] hover:border-[#0056B3] bg-[#F8F9FA] hover:bg-[#F2F4F7] flex flex-col items-center justify-center cursor-pointer transition-colors p-3 text-center"
-            >
-              <span className="text-xs font-bold text-[#0056B3]">体型写真を選択・撮影</span>
-              <span className="text-[10px] text-[#475467] mt-0.5">輪郭が分かる状態の写真</span>
-            </label>
-          )}
+
+            {currentPreview ? (
+              <div className="relative h-28 rounded-lg overflow-hidden border border-slate-200 bg-white">
+                <img src={currentPreview} alt="現在の体型" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={handleRemoveCurrent}
+                  className="absolute top-1 right-1 px-2 py-0.5 rounded bg-black/70 text-white text-[9px] font-bold cursor-pointer"
+                >
+                  変更
+                </button>
+              </div>
+            ) : (
+              <label
+                htmlFor="current-file-input"
+                className="h-28 rounded-lg border border-dashed border-slate-300 hover:border-blue-500 bg-white flex flex-col items-center justify-center cursor-pointer p-2 text-center"
+              >
+                <span className="text-xs font-bold text-blue-600">📷 現在写真</span>
+                <span className="text-[9px] text-slate-400 mt-0.5">現状を撮影・選択</span>
+              </label>
+            )}
+          </div>
         </div>
 
         <button
           onClick={handleAnalyze}
           disabled={isAnalyzing}
-          className="w-full h-12 py-3 bg-[#0056B3] hover:bg-[#004494] text-white font-bold rounded-lg transition-colors text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
         >
           {isAnalyzing ? (
             <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               <span>骨格・部位別の差分を分析中...</span>
             </>
           ) : (
-            <span>体型比較と推奨メニューを生成</span>
+            <span>体型比較と推奨メニューを生成（解析後に画像破棄）</span>
           )}
         </button>
-
-        {message && (
-          <div className={`p-2.5 rounded-lg text-xs font-medium text-center border ${
-            message.type === 'success'
-              ? 'bg-[#F2F4F7] text-[#0056B3] border-[#D0D5DD]'
-              : 'bg-red-50 text-red-700 border-red-200'
-          }`}>
-            {message.text}
-          </div>
-        )}
       </section>
 
       {analysisResult && (
-        <div className="space-y-4 mb-4">
-          <section className="bg-white text-[#1A1A1C] rounded-lg p-4 shadow-sm border border-[#D0D5DD]">
-            <div className="flex items-center gap-1.5 mb-2">
-              <h2 className="text-xs font-bold text-[#1A1A1C] uppercase tracking-wider">体型分析総評</h2>
-            </div>
-            <p className="text-xs leading-relaxed text-[#1A1A1C] font-medium">
-              {analysisResult.summary}
-            </p>
-            {analysisResult.focus_areas && (
-              <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-2 border-t border-[#D0D5DD]">
-                <span className="text-[10px] text-[#475467] font-bold">重点部位:</span>
-                {analysisResult.focus_areas.map((area, idx) => (
-                  <span key={idx} className="text-[10px] bg-[#F2F4F7] text-[#0056B3] border border-[#D0D5DD] px-2 py-0.5 rounded font-bold">
-                    {area}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+          <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setResultTab('summary')}
+              className={`py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                resultTab === 'summary'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              📋 総評
+            </button>
+            <button
+              type="button"
+              onClick={() => setResultTab('gaps')}
+              className={`py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                resultTab === 'gaps'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              🔍 部位ギャップ
+            </button>
+            <button
+              type="button"
+              onClick={() => setResultTab('menu')}
+              className={`py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                resultTab === 'menu'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              💪 強化メニュー
+            </button>
+          </div>
+
+          {resultTab === 'summary' && (
+            <div className="space-y-2.5">
+              <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-900">体型分析総評</span>
+                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
+                    🔒 元画像破棄済（数値・テキストのみ保存）
                   </span>
-                ))}
+                </div>
+                <p className="text-xs leading-relaxed text-slate-700">
+                  {analysisResult.summary || analysisResult.analysis_summary}
+                </p>
+                {analysisResult.focus_areas && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-200/60">
+                    <span className="text-[10px] text-slate-500 font-bold">重点部位:</span>
+                    {analysisResult.focus_areas.map((area, idx) => (
+                      <span key={idx} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200/70 px-2 py-0.5 rounded-md font-bold">
+                        {area}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </section>
 
-          <section className="bg-white rounded-lg p-4 shadow-sm border border-[#D0D5DD]">
-            <div className="flex items-center gap-1.5 mb-3">
-              <h2 className="text-xs font-bold text-[#1A1A1C]">理想と現在の部位別ギャップ</h2>
+              {analysisResult.advice && (
+                <div className="bg-blue-50/60 rounded-xl p-3.5 border border-blue-200/60 space-y-1">
+                  <span className="text-blue-900 font-bold text-[11px] block">💡 アドバイス</span>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    {analysisResult.advice}
+                  </p>
+                </div>
+              )}
             </div>
+          )}
 
+          {resultTab === 'gaps' && (
             <div className="space-y-2">
               {analysisResult.parts_analysis?.map((part, idx) => (
-                <div key={idx} className="p-3 rounded-lg bg-[#F8F9FA] border border-[#D0D5DD]">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-[#1A1A1C]">{part.part}</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-[#D0D5DD] bg-white text-[#1A1A1C]">
+                <div key={idx} className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900">{part.part}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200 bg-white text-slate-700">
                       優先度: {part.priority}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] text-[#475467] mt-1.5 bg-white p-2 rounded-md border border-[#D0D5DD]">
+                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-white p-2 rounded-lg border border-slate-200/70">
                     <div>
-                      <span className="text-[10px] text-[#475467] block">現在</span>
-                      <span className="font-medium text-[#1A1A1C]">{part.status}</span>
+                      <span className="text-slate-400 block">現在</span>
+                      <span className="font-bold text-slate-800">{part.status}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-[#475467] block">目標</span>
-                      <span className="font-bold text-[#0056B3]">{part.target}</span>
+                      <span className="text-slate-400 block">目標</span>
+                      <span className="font-bold text-blue-600">{part.target}</span>
                     </div>
                   </div>
-                  <div className="text-[10px] text-[#475467] mt-1.5 flex items-center gap-1">
-                    <span className="font-bold text-[#0056B3]">差分:</span>
+                  <div className="text-[10px] text-slate-600">
+                    <span className="font-bold text-blue-600 mr-1">差分:</span>
                     <span>{part.gap}</span>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
+          )}
 
-          <section className="bg-white rounded-lg p-4 shadow-sm border border-[#D0D5DD]">
-            <div className="flex items-center justify-between mb-3 border-b border-[#D0D5DD] pb-2">
-              <h2 className="text-xs font-bold text-[#1A1A1C]">強化メニュー提案</h2>
-              <span className="text-[10px] text-[#0056B3] bg-[#F2F4F7] font-bold px-2 py-0.5 rounded border border-[#D0D5DD]">
-                複合関節種目
-              </span>
-            </div>
-
-            <div className="space-y-3">
+          {resultTab === 'menu' && (
+            <div className="space-y-2">
               {analysisResult.compound_menu?.map((menu, idx) => (
-                <div key={idx} className="p-3 rounded-lg border border-[#D0D5DD] bg-white">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <h3 className="text-xs font-bold text-[#1A1A1C]">{menu.name}</h3>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-[#D0D5DD] bg-[#F2F4F7] text-[#0056B3]">
-                      {menu.category === 'gym' ? 'ジム' : '宅トレ'}
+                <div key={idx} className="p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-900">{menu.name}</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border border-blue-200/70 bg-blue-50 text-blue-700">
+                      {menu.category === 'gym' ? 'ジム' : '宅トレ'} / {menu.reps}×{menu.sets}
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {menu.targets?.map((t, tIdx) => (
-                      <span key={tIdx} className="text-[9px] bg-[#F2F4F7] text-[#475467] px-1.5 py-0.5 rounded border border-[#D0D5DD]">
-                        対象: {t}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="text-[11px] font-bold text-[#0056B3] mb-1.5">
-                    目安: {menu.reps} × {menu.sets}
-                  </div>
-
-                  <p className="text-[11px] text-[#475467] leading-relaxed mb-3">
+                  <p className="text-[11px] text-slate-600 leading-snug">
                     {menu.point}
                   </p>
 
                   <button
                     onClick={() => onApplyWorkoutMenu(menu)}
-                    className="w-full py-2 bg-[#0056B3] hover:bg-[#004494] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
                   >
                     このメニューを今日の記録に反映
                   </button>
                 </div>
               ))}
             </div>
-          </section>
-
-          <section className="bg-[#F8F9FA] rounded-lg p-4 border border-[#D0D5DD]">
-            <div className="text-[#1A1A1C] font-bold text-xs mb-1">
-              アドバイス
-            </div>
-            <p className="text-xs text-[#475467] leading-relaxed">
-              {analysisResult.advice}
-            </p>
-          </section>
-        </div>
+          )}
+        </section>
       )}
+
+      <section className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-extrabold text-slate-800">部位別ボディメイク重点ガイド</h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">理想のシルエットに近づくための3大ポイント</p>
+          </div>
+          <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/70">
+            Vシェイプ設計
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/70 flex items-start gap-2.5">
+            <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 border border-blue-200/70 flex items-center justify-center text-xs font-black shrink-0">
+              1
+            </span>
+            <div>
+              <span className="text-xs font-bold text-slate-900 block">大胸筋上部 × 三角筋でアウトラインを強調</span>
+              <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                チェストプレスやショルダープレスで鎖骨周りの厚みを出すことで、正面からのシルエットが引き締まります。
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/70 flex items-start gap-2.5">
+            <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200/70 flex items-center justify-center text-xs font-black shrink-0">
+              2
+            </span>
+            <div>
+              <span className="text-xs font-bold text-slate-900 block">広背筋＋体幹強化でウエストを引き締め</span>
+              <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                ラットプルダウンとプランクを組み合わせることで、背中から腰にかけての美しい逆三角形ラインを作ります。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

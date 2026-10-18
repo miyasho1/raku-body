@@ -1,56 +1,65 @@
 import React, { useState } from 'react';
-import HomeWorkoutScreen from './HomeWorkoutScreen';
 import GymWorkoutScreen from './GymWorkoutScreen';
+import HomeWorkoutScreen from './HomeWorkoutScreen';
 
-export default function WorkoutHubScreen({ initialType = 'gym', goal, presetWorkout, onBack, onRecordSuccess }) {
-  const [workoutType, setWorkoutType] = useState(initialType);
+export default function WorkoutHubScreen({
+  initialType = 'gym',
+  goal,
+  presetWorkout,
+  onBack,
+  onRecordSuccess
+}) {
+  const [workoutMode, setWorkoutMode] = useState(
+    presetWorkout?.category === 'home' ? 'home' : initialType
+  );
 
   return (
-    <div className="flex flex-col min-h-full">
-      <div className="px-5 pt-3 pb-2 bg-slate-100">
-        <div className="flex bg-slate-200/70 p-1.5 rounded-full border border-slate-300/60 max-w-xs mx-auto shadow-inner">
-          <button
-            type="button"
-            onClick={() => setWorkoutType('gym')}
-            className={`flex-1 py-2 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer ${
-              workoutType === 'gym'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            ジム・マシン記録
-          </button>
-          <button
-            type="button"
-            onClick={() => setWorkoutType('home')}
-            className={`flex-1 py-2 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer ${
-              workoutType === 'home'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            宅トレ・自重運動
-          </button>
-        </div>
+    <div className="flex flex-col space-y-3.5 pb-2">
+      <div className="bg-white rounded-2xl p-2 shadow-xs border border-slate-200/80 grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={() => setWorkoutMode('gym')}
+          className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            workoutMode === 'gym'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <span>🏋️</span>
+          <span>ジム・マシン</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setWorkoutMode('home')}
+          className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            workoutMode === 'home'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <span>🏠</span>
+          <span>宅トレ・自重</span>
+        </button>
       </div>
 
-      <div className="flex-1">
-        {workoutType === 'gym' ? (
-          <GymWorkoutScreen
-            goal={goal}
-            presetWorkout={presetWorkout}
-            onBack={onBack}
-            onRecordSuccess={onRecordSuccess}
-          />
-        ) : (
-          <HomeWorkoutScreen
-            goal={goal}
-            presetWorkout={presetWorkout}
-            onBack={onBack}
-            onRecordSuccess={onRecordSuccess}
-          />
-        )}
-      </div>
+      {workoutMode === 'gym' ? (
+        <GymWorkoutScreen
+          goal={goal}
+          presetWorkout={presetWorkout?.category === 'gym' ? presetWorkout : null}
+          onBack={onBack}
+          onRecordSuccess={onRecordSuccess}
+          embedded
+        />
+      ) : (
+        <HomeWorkoutScreen
+          goal={goal}
+          presetWorkout={presetWorkout?.category === 'home' ? presetWorkout : null}
+          onBack={onBack}
+          onRecordSuccess={onRecordSuccess}
+          embedded
+        />
+      )}
     </div>
   );
 }
