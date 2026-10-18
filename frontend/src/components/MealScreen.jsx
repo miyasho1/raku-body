@@ -17,6 +17,7 @@ import {
   saveProteinPreset,
   getActiveMyProtein
 } from '../utils/demoData';
+import { getUserStorageData, setUserStorageData } from '../utils/authService';
 
 export default function MealScreen({ onRecordSuccess, dataVersion }) {
   const getNowTime = () => {
@@ -136,15 +137,15 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
   const appendLocalMeal = (payload) => {
     const todayStr = getTodayDateString();
     try {
-      const rawLocal = localStorage.getItem('raku_demo_meals');
-      const parsedLocal = rawLocal ? JSON.parse(rawLocal) : [];
+      const rawLocal = getUserStorageData('meals', []);
+      const parsedLocal = Array.isArray(rawLocal) ? rawLocal : [];
       parsedLocal.unshift({
         id: `meal_${Date.now()}`,
         ...payload,
         log_date: todayStr,
         timestamp: `${todayStr} ${payload.meal_time || getNowTime()}:00`
       });
-      localStorage.setItem('raku_demo_meals', JSON.stringify(parsedLocal));
+      setUserStorageData('meals', parsedLocal);
     } catch {
     }
   };
@@ -162,8 +163,8 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
     } catch {
     }
     try {
-      const cached = localStorage.getItem('raku_demo_meals');
-      setMeals(cached ? JSON.parse(cached) : []);
+      const cached = getUserStorageData('meals', []);
+      setMeals(Array.isArray(cached) ? cached : []);
     } catch {
       setMeals([]);
     }

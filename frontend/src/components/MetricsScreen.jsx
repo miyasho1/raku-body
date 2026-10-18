@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import WheelPicker from './WheelPicker';
+import { getUserStorageData, setUserStorageData } from '../utils/authService';
 
 export default function MetricsScreen({ onRecordSuccess, dataVersion }) {
   const [activeTab, setActiveTab] = useState('record');
@@ -43,15 +44,15 @@ export default function MetricsScreen({ onRecordSuccess, dataVersion }) {
     }
     if (loadedMeals.length === 0) {
       try {
-        const rawM = localStorage.getItem('raku_demo_meals');
-        if (rawM) loadedMeals = JSON.parse(rawM);
+        const rawM = getUserStorageData('meals', []);
+        if (rawM && rawM.length > 0) loadedMeals = rawM;
       } catch {
       }
     }
     if (loadedWorkouts.length === 0) {
       try {
-        const rawW = localStorage.getItem('raku_demo_workouts');
-        if (rawW) loadedWorkouts = JSON.parse(rawW);
+        const rawW = getUserStorageData('workouts', []);
+        if (rawW && rawW.length > 0) loadedWorkouts = rawW;
       } catch {
       }
     }
@@ -72,8 +73,8 @@ export default function MetricsScreen({ onRecordSuccess, dataVersion }) {
     } catch {
     }
     try {
-      const cached = localStorage.getItem('raku_demo_metrics');
-      setMetrics(cached ? JSON.parse(cached) : []);
+      const cached = getUserStorageData('metrics', []);
+      setMetrics(Array.isArray(cached) ? cached : []);
     } catch {
       setMetrics([]);
     }
@@ -100,17 +101,14 @@ export default function MetricsScreen({ onRecordSuccess, dataVersion }) {
     } catch {
     }
     try {
-      const cached = localStorage.getItem('raku_demo_metrics');
-      if (cached) {
-        const list = JSON.parse(cached);
-        if (list.length > 0) {
-          const latest = list[list.length - 1];
-          setWeightInt(Math.floor(latest.weight));
-          setWeightDec(Math.round((latest.weight % 1) * 10));
-          if (latest.body_fat) {
-            setFatInt(Math.floor(latest.body_fat));
-            setFatDec(Math.round((latest.body_fat % 1) * 10));
-          }
+      const list = getUserStorageData('metrics', []);
+      if (list && Array.isArray(list) && list.length > 0) {
+        const latest = list[list.length - 1];
+        setWeightInt(Math.floor(latest.weight));
+        setWeightDec(Math.round((latest.weight % 1) * 10));
+        if (latest.body_fat) {
+          setFatInt(Math.floor(latest.body_fat));
+          setFatDec(Math.round((latest.body_fat % 1) * 10));
         }
       }
     } catch {
@@ -167,15 +165,15 @@ export default function MetricsScreen({ onRecordSuccess, dataVersion }) {
     const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     try {
-      const cached = localStorage.getItem('raku_demo_metrics');
-      const list = cached ? JSON.parse(cached) : [];
+      const cached = getUserStorageData('metrics', []);
+      const list = Array.isArray(cached) ? cached : [];
       const existingIdx = list.findIndex((item) => item.date === todayStr);
       if (existingIdx >= 0) {
         list[existingIdx] = { ...list[existingIdx], weight: currentWeightVal, body_fat: currentFatVal };
       } else {
         list.push({ id: `metric_${Date.now()}`, date: todayStr, weight: currentWeightVal, body_fat: currentFatVal });
       }
-      localStorage.setItem('raku_demo_metrics', JSON.stringify(list));
+      setUserStorageData('metrics', list);
     } catch {
     }
 

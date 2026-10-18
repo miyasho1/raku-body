@@ -1,4 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import {
+  createAuthenticatedSession,
+  createGuestSession,
+  initializeGoogleIdentityServices
+} from '../utils/authService';
 
 const LAB_PASSCODE = '2026';
 
@@ -33,6 +38,15 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [selectedAccountIdx, setSelectedAccountIdx] = useState(0);
   const [demoEmail, setDemoEmail] = useState('');
   const [demoEmailError, setDemoEmailError] = useState('');
+
+  useEffect(() => {
+    const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+    if (googleClientId && typeof window !== 'undefined' && window.google?.accounts?.id) {
+      initializeGoogleIdentityServices(googleClientId, (user) => {
+        onLoginSuccess(user);
+      });
+    }
+  }, [onLoginSuccess]);
 
   const verifyPasscodeValue = (val) => {
     if (val.trim() === LAB_PASSCODE) {
@@ -75,25 +89,13 @@ export default function LoginScreen({ onLoginSuccess }) {
 
   const handleOneTapGoogleLogin = () => {
     const acc = PRESET_ACCOUNTS[selectedAccountIdx] || PRESET_ACCOUNTS[0];
-    onLoginSuccess({
-      name: acc.name,
-      email: acc.email,
-      avatarUrl: '',
-      initial: acc.initial,
-      bgColor: acc.bgColor,
-      authProvider: 'google'
-    });
+    const user = createAuthenticatedSession(acc);
+    onLoginSuccess(user);
   };
 
   const handleGuestLogin = () => {
-    onLoginSuccess({
-      name: 'ゲストユーザー',
-      email: 'guest@rakubody.app',
-      avatarUrl: '',
-      initial: 'G',
-      bgColor: 'bg-slate-600',
-      authProvider: 'guest'
-    });
+    const user = createGuestSession();
+    onLoginSuccess(user);
   };
 
   const handleEmailLoginSubmit = (e) => {
@@ -105,14 +107,15 @@ export default function LoginScreen({ onLoginSuccess }) {
     }
     setDemoEmailError('');
     const localPart = trimmed.split('@')[0] || 'ユーザー';
-    onLoginSuccess({
+    const user = createAuthenticatedSession({
+      id: localPart,
       name: localPart,
       email: trimmed,
-      avatarUrl: '',
       initial: localPart.charAt(0).toUpperCase(),
       bgColor: 'bg-indigo-600',
       authProvider: 'email'
     });
+    onLoginSuccess(user);
   };
 
   return (

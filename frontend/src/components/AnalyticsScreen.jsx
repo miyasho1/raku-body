@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getUserStorageData } from '../utils/authService';
 
 export default function AnalyticsScreen({ dataVersion }) {
   const [period, setPeriod] = useState('week');
@@ -53,22 +54,22 @@ export default function AnalyticsScreen({ dataVersion }) {
 
     if (loadedWorkouts.length === 0) {
       try {
-        const rawW = localStorage.getItem('raku_demo_workouts');
-        if (rawW) loadedWorkouts = JSON.parse(rawW);
+        const rawW = getUserStorageData('workouts', []);
+        if (rawW && rawW.length > 0) loadedWorkouts = rawW;
       } catch {
       }
     }
     if (loadedMeals.length === 0) {
       try {
-        const rawM = localStorage.getItem('raku_demo_meals');
-        if (rawM) loadedMeals = JSON.parse(rawM);
+        const rawM = getUserStorageData('meals', []);
+        if (rawM && rawM.length > 0) loadedMeals = rawM;
       } catch {
       }
     }
     if (loadedMetrics.length === 0) {
       try {
-        const rawB = localStorage.getItem('raku_demo_metrics');
-        if (rawB) loadedMetrics = JSON.parse(rawB);
+        const rawB = getUserStorageData('metrics', []);
+        if (rawB && rawB.length > 0) loadedMetrics = rawB;
       } catch {
       }
     }

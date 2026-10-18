@@ -10,22 +10,21 @@ import MealScreen from './components/MealScreen';
 import WorkoutHubScreen from './components/WorkoutHubScreen';
 import LoginScreen from './components/LoginScreen';
 import { seedOneWeekDemoData, resetAllAppData } from './utils/demoData';
+import {
+  getCurrentAuthUser,
+  setAuthUserSession,
+  clearAuthUserSession,
+  clearGuestSessionData,
+  getUserStorageData,
+  setUserStorageData
+} from './utils/authService';
 
 export default function App() {
-  const [authUser, setAuthUser] = useState(() => {
-    try {
-      const isPasscodeOk = localStorage.getItem('raku_lab_passcode_verified') === 'true';
-      if (!isPasscodeOk) return null;
-      const saved = localStorage.getItem('raku_auth_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [authUser, setAuthUser] = useState(() => getCurrentAuthUser());
   const [activeTab, setActiveTab] = useState('home');
   const [streakDays, setStreakDays] = useState(() => {
-    const savedStreak = localStorage.getItem('raku_demo_streak');
-    return savedStreak ? parseInt(savedStreak, 10) || 0 : 0;
+    const savedStreak = getUserStorageData('streak', 0);
+    return parseInt(savedStreak, 10) || 0;
   });
   const [isLoggedToday, setIsLoggedToday] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -135,7 +134,6 @@ export default function App() {
   const fetchInitialData = async () => {
     try {
       if (localStorage.getItem('raku_device_initialized') !== 'true') {
-        await seedOneWeekDemoData();
         localStorage.setItem('raku_device_initialized', 'true');
       }
     } catch {
@@ -177,22 +175,18 @@ export default function App() {
 
     if (!statusLoaded) {
       try {
-        const savedStreak = localStorage.getItem('raku_demo_streak');
-        if (savedStreak !== null) {
-          const parsedStreak = parseInt(savedStreak, 10) || 0;
-          setStreakDays(parsedStreak);
-          setIsLoggedToday(parsedStreak > 0);
-        }
+        const savedStreak = getUserStorageData('streak', 0);
+        const parsedStreak = parseInt(savedStreak, 10) || 0;
+        setStreakDays(parsedStreak);
+        setIsLoggedToday(parsedStreak > 0);
       } catch {
       }
     }
 
     if (!logsLoaded) {
       try {
-        const savedLogs = localStorage.getItem('raku_demo_logs');
-        if (savedLogs) {
-          setLogs(JSON.parse(savedLogs));
-        }
+        const savedLogs = getUserStorageData('logs', []);
+        setLogs(Array.isArray(savedLogs) ? savedLogs : []);
       } catch {
       }
     }
@@ -206,16 +200,25 @@ export default function App() {
   };
 
   const handleLoginSuccess = (userObj) => {
-    localStorage.setItem('raku_auth_user', JSON.stringify(userObj));
+    setAuthUserSession(userObj);
     setAuthUser(userObj);
     setActiveTab('home');
+    setDataVersion((v) => v + 1);
+    fetchInitialData();
     showToast(`${userObj.name}さん、ようこそ！`);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('raku_auth_user');
+    if (authUser?.isGuest || authUser?.authProvider === 'guest') {
+      clearGuestSessionData();
+    }
+    clearAuthUserSession();
     setAuthUser(null);
     setIsDrawerOpen(false);
+    setLogs([]);
+    setStreakDays(0);
+    setIsLoggedToday(false);
+    setDataVersion((v) => v + 1);
     showToast('ログアウトしました');
   };
 
@@ -227,6 +230,10 @@ export default function App() {
     setHeightCm(cleanHeight);
     setTargetWeightKg(cleanWeight);
     setTargetCaloriesKcal(cleanCalories);
+    setUserStorageData('body_height', cleanHeight);
+    setUserStorageData('user_height', cleanHeight);
+    setUserStorageData('target_weight', cleanWeight);
+    setUserStorageData('target_calories', cleanCalories);
     localStorage.setItem('raku_body_height', cleanHeight);
     localStorage.setItem('raku_user_height', cleanHeight);
     localStorage.setItem('raku_target_weight', cleanWeight);
@@ -239,7 +246,7 @@ export default function App() {
     if (isSeedingDemo) return;
     setIsSeedingDemo(true);
     try {
-      const dataset = await seedOneWeekDemoData();
+      const dataset = await seedOneWeekDemoData(authUser?.uid);
       setStreakDays(dataset.streakDays);
       setIsLoggedToday(true);
       setLogs(dataset.logs);
@@ -253,7 +260,7 @@ export default function App() {
   };
 
   const handleExecuteResetData = async () => {
-    await resetAllAppData();
+    await resetAllAppData(authUser?.uid);
     localStorage.setItem('raku_device_initialized', 'true');
     setStreakDays(0);
     setIsLoggedToday(false);
@@ -280,12 +287,12 @@ export default function App() {
     };
 
     try {
-      const rawLogs = localStorage.getItem('raku_demo_logs');
-      const parsedLogs = rawLogs ? JSON.parse(rawLogs) : [];
+      const rawLogs = getUserStorageData('logs', []);
+      const parsedLogs = Array.isArray(rawLogs) ? rawLogs : [];
       parsedLogs.unshift(localEntry);
-      localStorage.setItem('raku_demo_logs', JSON.stringify(parsedLogs));
+      setUserStorageData('logs', parsedLogs);
       const nextStreak = Math.max(1, streakDays || 1);
-      localStorage.setItem('raku_demo_streak', String(nextStreak));
+      setUserStorageData('streak', String(nextStreak));
     } catch {
     }
 

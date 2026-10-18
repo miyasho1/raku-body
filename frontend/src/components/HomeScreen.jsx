@@ -10,6 +10,7 @@ import {
   saveProteinPreset,
   getActiveMyProtein
 } from '../utils/demoData';
+import { getUserStorageData, setUserStorageData } from '../utils/authService';
 
 export default function HomeScreen({
   streakDays,
@@ -177,15 +178,15 @@ export default function HomeScreen({
     }
     if (loadedMeals.length === 0) {
       try {
-        const localMeals = localStorage.getItem('raku_demo_meals');
-        if (localMeals) loadedMeals = JSON.parse(localMeals);
+        const localMeals = getUserStorageData('meals', []);
+        if (localMeals && localMeals.length > 0) loadedMeals = localMeals;
       } catch {
       }
     }
     if (loadedWorkouts.length === 0) {
       try {
-        const localWorkouts = localStorage.getItem('raku_demo_workouts');
-        if (localWorkouts) loadedWorkouts = JSON.parse(localWorkouts);
+        const localWorkouts = getUserStorageData('workouts', []);
+        if (localWorkouts && localWorkouts.length > 0) loadedWorkouts = localWorkouts;
       } catch {
       }
     }
@@ -366,15 +367,15 @@ export default function HomeScreen({
     };
 
     try {
-      const rawLocal = localStorage.getItem('raku_demo_meals');
-      const parsedLocal = rawLocal ? JSON.parse(rawLocal) : [];
+      const rawLocal = getUserStorageData('meals', []);
+      const parsedLocal = Array.isArray(rawLocal) ? rawLocal : [];
       parsedLocal.unshift({
         id: `meal_${Date.now()}`,
         ...mealPayload,
         log_date: todayStr,
         timestamp: `${todayStr} ${currentTime}:00`
       });
-      localStorage.setItem('raku_demo_meals', JSON.stringify(parsedLocal));
+      setUserStorageData('meals', parsedLocal);
     } catch {
     }
 

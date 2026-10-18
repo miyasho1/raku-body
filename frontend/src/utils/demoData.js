@@ -1,3 +1,5 @@
+import { getActiveUserId, setUserStorageData, removeUserStorageData } from './authService';
+
 export const DEFAULT_PROTEIN_PRESETS = [
   {
     id: 'preset_gold_whey',
@@ -233,13 +235,16 @@ export function generateWeekDemoDataset() {
   };
 }
 
-export async function seedOneWeekDemoData() {
+export async function seedOneWeekDemoData(targetUid = null) {
+  const uid = targetUid || getActiveUserId();
   const dataset = generateWeekDemoDataset();
-  localStorage.setItem('raku_demo_metrics', JSON.stringify(dataset.metrics));
-  localStorage.setItem('raku_demo_workouts', JSON.stringify(dataset.workouts));
-  localStorage.setItem('raku_demo_meals', JSON.stringify(dataset.meals));
-  localStorage.setItem('raku_demo_logs', JSON.stringify(dataset.logs));
-  localStorage.setItem('raku_demo_streak', '7');
+  setUserStorageData('metrics', dataset.metrics, uid);
+  setUserStorageData('workouts', dataset.workouts, uid);
+  setUserStorageData('meals', dataset.meals, uid);
+  setUserStorageData('logs', dataset.logs, uid);
+  setUserStorageData('streak', '7', uid);
+  setUserStorageData('protein_presets', DEFAULT_PROTEIN_PRESETS, uid);
+  setUserStorageData('my_protein', DEFAULT_PROTEIN_PRESETS[0], uid);
   localStorage.setItem('raku_protein_presets', JSON.stringify(DEFAULT_PROTEIN_PRESETS));
   localStorage.setItem('raku_my_protein', JSON.stringify(DEFAULT_PROTEIN_PRESETS[0]));
 
@@ -256,22 +261,30 @@ export async function seedOneWeekDemoData() {
   return dataset;
 }
 
-export async function resetAllAppData() {
-  const keysToRemove = [
-    'raku_demo_metrics',
-    'raku_demo_workouts',
-    'raku_demo_meals',
-    'raku_demo_logs',
-    'raku_demo_streak',
-    'raku_my_protein',
-    'raku_protein_presets',
-    'raku_selected_goal',
-    'raku_body_height',
-    'raku_user_height',
-    'raku_target_weight',
-    'raku_target_calories'
+export async function resetAllAppData(targetUid = null) {
+  const uid = targetUid || getActiveUserId();
+  const keys = [
+    'metrics',
+    'workouts',
+    'meals',
+    'logs',
+    'streak',
+    'my_protein',
+    'protein_presets',
+    'selected_goal',
+    'body_height',
+    'user_height',
+    'target_weight',
+    'target_calories'
   ];
-  keysToRemove.forEach((k) => localStorage.removeItem(k));
+  keys.forEach((k) => removeUserStorageData(k, uid));
+  keys.forEach((k) => {
+    try {
+      localStorage.removeItem(`raku_demo_${k}`);
+      localStorage.removeItem(`raku_${k}`);
+    } catch {
+    }
+  });
 
   try {
     await fetch('/api/demo/reset', { method: 'POST' });

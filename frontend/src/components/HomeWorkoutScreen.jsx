@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import WheelPicker from './WheelPicker';
+import { getUserStorageData, setUserStorageData } from '../utils/authService';
 
 export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecordSuccess, embedded = false }) {
   const homeCourses = {
@@ -98,15 +99,15 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
     const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
     try {
-      const raw = localStorage.getItem('raku_demo_workouts');
-      const list = raw ? JSON.parse(raw) : [];
+      const raw = getUserStorageData('workouts', []);
+      const list = Array.isArray(raw) ? raw : [];
       list.unshift({
         id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         ...payload,
         log_date: todayStr,
         timestamp: `${todayStr} ${timeStr}`
       });
-      localStorage.setItem('raku_demo_workouts', JSON.stringify(list));
+      setUserStorageData('workouts', list);
     } catch {
     }
   };
@@ -124,11 +125,10 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
     } catch {
     }
     try {
-      const raw = localStorage.getItem('raku_demo_workouts');
-      if (raw) {
-        const all = JSON.parse(raw);
-        const homeOnly = all.filter((w) => w.workout_type === 'home');
-        setWorkouts(homeOnly.length > 0 ? homeOnly : all.slice(0, 4));
+      const raw = getUserStorageData('workouts', []);
+      if (raw && Array.isArray(raw)) {
+        const homeOnly = raw.filter((w) => w.workout_type === 'home');
+        setWorkouts(homeOnly.length > 0 ? homeOnly : raw.slice(0, 4));
       } else {
         setWorkouts([]);
       }

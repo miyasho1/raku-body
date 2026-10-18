@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import WheelPicker from './WheelPicker';
+import { getUserStorageData, setUserStorageData } from '../utils/authService';
 
 export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecordSuccess, embedded = false }) {
   const gymCourses = {
@@ -105,15 +106,15 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
     const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00`;
     try {
-      const raw = localStorage.getItem('raku_demo_workouts');
-      const list = raw ? JSON.parse(raw) : [];
+      const raw = getUserStorageData('workouts', []);
+      const list = Array.isArray(raw) ? raw : [];
       list.unshift({
         id: `w_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         ...payload,
         log_date: todayStr,
         timestamp: `${todayStr} ${timeStr}`
       });
-      localStorage.setItem('raku_demo_workouts', JSON.stringify(list));
+      setUserStorageData('workouts', list);
     } catch {
     }
   };
@@ -131,10 +132,9 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
     } catch {
     }
     try {
-      const raw = localStorage.getItem('raku_demo_workouts');
-      if (raw) {
-        const all = JSON.parse(raw);
-        setWorkouts(all.filter((w) => w.workout_type === 'gym' || !w.workout_type));
+      const raw = getUserStorageData('workouts', []);
+      if (raw && Array.isArray(raw)) {
+        setWorkouts(raw.filter((w) => w.workout_type === 'gym' || !w.workout_type));
       } else {
         setWorkouts([]);
       }
