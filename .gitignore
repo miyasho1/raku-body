@@ -1,0 +1,15 @@
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.env
+.env.local
+.env.*.local
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite3
+backend/uploads/
+.DS_Store
+Thumbs.db
+*.log

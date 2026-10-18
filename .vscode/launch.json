@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI バックエンド起動",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "main:app",
+        "--reload",
+        "--port",
+        "8000"
+      ],
+      "jinja": true,
+      "cwd": "${workspaceFolder}/backend"
+    },
+    {
+      "name": "フロントエンド開発サーバー起動",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "フルスタック同時起動",
+      "configurations": [
+        "FastAPI バックエンド起動",
+        "フロントエンド開発サーバー起動"
+      ],
+      "stopAll": true
+    }
+  ]
+}
