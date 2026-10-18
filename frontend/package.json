@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "finish": "..\\scripts\\sync-finish.bat",
+    "start-sync": "..\\scripts\\sync-start.bat"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
