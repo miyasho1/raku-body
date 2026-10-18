@@ -1,7 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import App from './App.jsx';
 import './index.css';
+
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '1029384756-raku-body-demo-client-id.apps.googleusercontent.com').trim();
 
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   const isSubdir = window.location.pathname.startsWith('/raku-body');
@@ -62,6 +65,8 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <App />
+    </GoogleOAuthProvider>
   </React.StrictMode>
 );

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 import {
   createAuthenticatedSession,
   createGuestSession,
@@ -85,6 +87,29 @@ export default function LoginScreen({ onLoginSuccess }) {
     setPasscodeInput('');
     setPasscodeError('');
     setIsPasscodeUnlocked(false);
+  };
+
+  const handleGoogleOAuthSuccess = (credentialResponse) => {
+    try {
+      if (!credentialResponse?.credential) return;
+      const decoded = jwtDecode(credentialResponse.credential);
+      const userData = {
+        uid: decoded.sub ? `google_${decoded.sub}` : `google_${Date.now()}`,
+        id: decoded.sub || `google_${Date.now()}`,
+        name: decoded.name || decoded.given_name || 'Googleユーザー',
+        email: decoded.email || '',
+        avatarUrl: decoded.picture || '',
+        initial: (decoded.name || decoded.email || 'G').charAt(0).toUpperCase(),
+        bgColor: 'bg-blue-600',
+        authProvider: 'google',
+        isGuest: false,
+        sessionStatus: 'authenticated',
+        idToken: credentialResponse.credential
+      };
+      localStorage.setItem('raku_auth_user', JSON.stringify(userData));
+      onLoginSuccess(userData);
+    } catch {
+    }
   };
 
   const handleOneTapGoogleLogin = () => {
@@ -263,6 +288,21 @@ export default function LoginScreen({ onLoginSuccess }) {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex flex-col items-center justify-center w-full max-w-full overflow-hidden box-border space-y-2">
+              <span className="text-[11px] font-bold text-slate-700">Googleアカウントで簡単サインイン</span>
+              <div className="w-full flex items-center justify-center max-w-full overflow-hidden">
+                <GoogleLogin
+                  onSuccess={handleGoogleOAuthSuccess}
+                  onError={() => {}}
+                  theme="outline"
+                  size="large"
+                  text="signin_with"
+                  shape="rectangular"
+                  width="100%"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 w-full">
