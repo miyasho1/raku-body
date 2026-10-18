@@ -116,9 +116,9 @@ export default function LoginScreen({ onLoginSuccess }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3.5 flex flex-col justify-between bg-slate-100 no-scrollbar [&::-webkit-scrollbar]:hidden space-y-3.5">
-      <div className="space-y-3.5">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 text-center space-y-3">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3.5 flex flex-col justify-between bg-slate-100 no-scrollbar [&::-webkit-scrollbar]:hidden space-y-3.5 w-full max-w-full box-border">
+      <div className="space-y-3.5 w-full max-w-full">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 text-center space-y-3 w-full max-w-full box-border">
           <div className="flex items-center justify-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-sm flex items-center justify-center font-black text-xl tracking-tight shrink-0">
               R
@@ -133,8 +133,8 @@ export default function LoginScreen({ onLoginSuccess }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5 text-center">
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1">
+          <div className="grid grid-cols-3 gap-2.5 text-center w-full">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1 min-w-0">
               <span className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/60 flex items-center justify-center text-xs">
                 📸
               </span>
@@ -142,7 +142,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               <span className="text-[9px] text-slate-500 leading-tight">食事・体型診断</span>
             </div>
 
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1 min-w-0">
               <span className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-xs">
                 💪
               </span>
@@ -150,7 +150,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               <span className="text-[9px] text-slate-500 leading-tight">直感ピッカー記録</span>
             </div>
 
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex flex-col items-center gap-1 min-w-0">
               <span className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/60 flex items-center justify-center text-xs">
                 📊
               </span>
@@ -161,56 +161,56 @@ export default function LoginScreen({ onLoginSuccess }) {
         </div>
 
         {!isPasscodeUnlocked ? (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-200/90 space-y-3.5">
-            <div className="flex items-center justify-between">
+          <div className="border border-slate-200/80 rounded-2xl p-4 bg-white shadow-sm w-full max-w-full box-border space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 w-full">
               <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg">
                 🛡️ 研究室実証テスト・メンバー限定ゲート
               </span>
               <span className="text-[10px] font-bold text-slate-400">初回のみ入力</span>
             </div>
 
-            <div className="text-left space-y-1">
-              <h2 className="text-sm font-extrabold text-slate-900">
+            <div className="text-left space-y-1 w-full">
+              <h2 className="text-sm font-extrabold text-slate-900 break-all whitespace-normal">
                 招待パスコードを入力してロック解除
               </h2>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
+              <p className="text-[11px] text-slate-500 leading-relaxed break-all whitespace-normal">
                 部外者アクセス防止のため、研究室メンバー専用の4桁パスコードを入力してください（一度解除すると次回から自動スキップされます）。
               </p>
             </div>
 
-            <form onSubmit={handlePasscodeSubmit} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-3">
-              <div className="flex items-center gap-2.5">
+            <form onSubmit={handlePasscodeSubmit} className="rounded-xl p-3 bg-slate-50 border border-slate-100 w-full max-w-full box-border space-y-3">
+              <div className="w-full space-y-2.5">
                 <input
                   type="password"
                   inputMode="numeric"
                   maxLength={4}
                   value={passcodeInput}
                   onChange={handlePasscodeChange}
-                  placeholder="4桁パスコード"
-                  className="flex-1 bg-white border border-slate-300 focus:border-indigo-600 rounded-xl px-3.5 py-2.5 text-center text-base font-black tracking-[0.35em] text-slate-900 focus:outline-none tabular-nums"
+                  placeholder="4桁 パスコード"
+                  className="w-full max-w-full rounded-xl py-3 text-center border border-slate-200 bg-white shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-black tracking-[0.35em] text-slate-900 tabular-nums box-border"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all cursor-pointer shrink-0"
+                  className="w-full max-w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all cursor-pointer text-center"
                 >
                   ロック解除
                 </button>
               </div>
 
               {passcodeError && (
-                <p className="text-[11px] text-rose-600 font-bold text-center">
+                <p className="text-[11px] text-rose-600 font-bold text-center break-all whitespace-normal">
                   {passcodeError}
                 </p>
               )}
 
-              <div className="flex items-center justify-between pt-1 border-t border-slate-200/70">
-                <span className="text-[10px] text-slate-500 font-medium">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/70 text-[10px] whitespace-normal break-all w-full">
+                <span className="text-slate-500 font-medium break-all whitespace-normal">
                   ※ 研究室テスト用パスコード: <strong className="text-slate-700 font-extrabold">2026</strong>
                 </span>
                 <button
                   type="button"
                   onClick={() => verifyPasscodeValue(LAB_PASSCODE)}
-                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                  className="font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer shrink-0"
                 >
                   ワンタップで2026を入力
                 </button>
@@ -218,7 +218,7 @@ export default function LoginScreen({ onLoginSuccess }) {
             </form>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3.5">
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3.5 w-full max-w-full box-border">
             <div className="flex items-center justify-between">
               <div className="text-left">
                 <h2 className="text-sm font-extrabold text-slate-900">ワンタップでシンプルに始める</h2>
@@ -236,7 +236,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5 w-full">
               {PRESET_ACCOUNTS.map((acc, idx) => {
                 const isSelected = selectedAccountIdx === idx;
                 return (
@@ -244,7 +244,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                     key={acc.id}
                     type="button"
                     onClick={() => setSelectedAccountIdx(idx)}
-                    className={`p-3 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer min-w-0 w-full ${
                       isSelected
                         ? 'bg-blue-50/80 border-blue-500 shadow-2xs'
                         : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100'
@@ -262,11 +262,11 @@ export default function LoginScreen({ onLoginSuccess }) {
               })}
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5 w-full">
               <button
                 type="button"
                 onClick={handleOneTapGoogleLogin}
-                className="py-3 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-sm font-bold active:scale-98 flex items-center justify-center gap-2 cursor-pointer transition-all text-xs"
+                className="py-3 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl shadow-sm font-bold active:scale-98 flex items-center justify-center gap-2 cursor-pointer transition-all text-xs min-w-0 w-full"
               >
                 <svg className="w-4 h-4 shrink-0 bg-white rounded-full p-0.5" viewBox="0 0 24 24">
                   <path
@@ -286,21 +286,21 @@ export default function LoginScreen({ onLoginSuccess }) {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                <span>ワンタップ開始</span>
+                <span className="truncate">ワンタップ開始</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleGuestLogin}
-                className="py-3 px-3 bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-bold rounded-xl border border-slate-200/80 text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="py-3 px-3 bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-bold rounded-xl border border-slate-200/80 text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 min-w-0 w-full"
               >
                 <span>🚀</span>
-                <span>ゲストで始める</span>
+                <span className="truncate">ゲストで始める</span>
               </button>
             </div>
 
-            <form onSubmit={handleEmailLoginSubmit} className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 space-y-2">
-              <div className="flex items-center justify-between gap-2">
+            <form onSubmit={handleEmailLoginSubmit} className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 space-y-2 w-full max-w-full box-border">
+              <div className="flex items-center justify-between gap-2 w-full">
                 <span className="text-[11px] font-bold text-slate-600 shrink-0">メール:</span>
                 <input
                   type="email"
@@ -326,25 +326,25 @@ export default function LoginScreen({ onLoginSuccess }) {
           </div>
         )}
 
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5 w-full max-w-full box-border">
+          <div className="flex items-center justify-between w-full">
             <span className="text-xs font-extrabold text-slate-800">🛡️ プライバシー＆端末内ローカル保護設計</span>
-            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
+            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70 shrink-0">
               標準搭載
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70">
+          <div className="grid grid-cols-2 gap-2.5 w-full">
+            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 min-w-0">
               <span className="text-[11px] font-bold text-slate-800 block">顔領域18%自動カット</span>
               <span className="text-[10px] text-slate-500 block mt-0.5">体型写真の上部を自動トリミング</span>
             </div>
-            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70">
+            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 min-w-0">
               <span className="text-[11px] font-bold text-slate-800 block">元画像のメモリ即破棄</span>
               <span className="text-[10px] text-slate-500 block mt-0.5">解析後は数値とテキストのみ保存</span>
             </div>
           </div>
-          <div className="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-200/80 text-center">
-            <p className="text-[11px] font-bold text-emerald-900 leading-relaxed">
+          <div className="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-200/80 text-center w-full">
+            <p className="text-[11px] font-bold text-emerald-900 leading-relaxed break-all whitespace-normal">
               🔒 記録データはお使いの端末内にのみ保存され、他のユーザーや外部に共有されることはありません
             </p>
           </div>
