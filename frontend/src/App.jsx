@@ -13,6 +13,8 @@ import OnboardingGuide from './components/OnboardingGuide';
 import ProfileSetup from './components/ProfileSetup';
 import AiAndBackupSettings from './components/AiAndBackupSettings';
 import AdminScreen from './components/AdminScreen';
+import HealthLinkSettings from './components/HealthLinkSettings';
+import { pullHealthImports } from './utils/healthSync';
 import { GOAL_OPTIONS, getSavedGoal, saveGoal, goalLabel } from './utils/goals';
 import { refreshServerUser, signOutServer, flushPending } from './utils/serverSync';
 import { setStoredGeminiKey } from './utils/geminiAnalyzer';
@@ -139,7 +141,22 @@ export default function App() {
       setAuthUserSession(u);
       setAuthUser(u);
       flushPending();
+      pullHealthImports(u.uid).then((r) => {
+        if (r && r.ok) setDataVersion((v) => v + 1);
+      }).catch(() => {});
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      const u = getCurrentAuthUser();
+      if (document.visibilityState !== 'visible' || !u || u.authProvider !== 'server') return;
+      pullHealthImports(u.uid).then((r) => {
+        if (r && r.ok) setDataVersion((v) => v + 1);
+      }).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
   const fetchNetworkInfo = async () => {
@@ -803,6 +820,13 @@ export default function App() {
                     <span className="text-[10px] text-blue-700 block mt-0.5">記録の始め方を4ステップで紹介します</span>
                   </div>
                 </button>
+
+                {authUser?.authProvider === 'server' && (
+                  <HealthLinkSettings
+                    authUser={authUser}
+                    onImported={() => setDataVersion((v) => v + 1)}
+                  />
+                )}
 
                 <AiAndBackupSettings
                   onRestored={async () => {

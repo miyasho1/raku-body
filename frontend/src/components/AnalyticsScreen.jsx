@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getUserStorageData } from '../utils/authService';
+import { getHealthDaily } from '../utils/healthSync';
 
 export default function AnalyticsScreen({ dataVersion }) {
   const [period, setPeriod] = useState('week');
@@ -266,13 +267,21 @@ export default function AnalyticsScreen({ dataVersion }) {
         filteredWorkouts.reduce((acc, w) => acc + (w.sets || 3) * 18 + (w.duration_minutes || 15) * 4, 0) / 7
       )
     : 0;
-  const estimatedDailyExpenditure = Math.round(latestWeight * 29 + avgDailyWorkoutBurn);
+  const nowLocal = new Date();
+  const localTodayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
+  const healthInPeriod = getHealthDaily().filter((h) => h && h.day >= startDateStr && h.day < localTodayStr && Number(h.basal_kcal) > 0 && h.active_kcal !== null && h.active_kcal !== undefined && Number.isFinite(Number(h.active_kcal)));
+  const healthDays = healthInPeriod.length;
+  const estimatedDailyExpenditure = healthDays > 0
+    ? Math.round(healthInPeriod.reduce((acc, h) => acc + Number(h.active_kcal) + Number(h.basal_kcal), 0) / healthDays)
+    : Math.round(latestWeight * 29 + avgDailyWorkoutBurn);
+  const expenditureSource = healthDays > 0 ? `ヘルスケアの記録（${healthDays}日分の平均）` : '体重と運動の記録からの推定';
   const effectiveAvgIntake = avgCalories || 0;
   const dailyCalorieBalance = effectiveAvgIntake - estimatedDailyExpenditure;
 
   const hasMeals = filteredMeals.length > 0;
   const hasWeight = sortedMetrics.length > 0;
   const canPredict = sortedMetrics.length >= 2;
+  const canExpenditure = healthDays > 0 || hasWeight;
   const canReport = hasMeals && canPredict;
 
   let dailyWeightSlope = 0;
@@ -460,13 +469,13 @@ export default function AnalyticsScreen({ dataVersion }) {
             <span className="text-[10px] font-bold text-slate-600">kcal</span>
           </div>
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-lg text-center truncate ${
-            !(hasMeals && hasWeight)
+            !(hasMeals && canExpenditure)
               ? 'bg-slate-100 text-slate-500'
               : avgCalories > targetDailyCal
               ? 'bg-amber-50 text-amber-700'
               : 'bg-emerald-50 text-emerald-700'
           }`}>
-            {hasMeals && hasWeight ? `収支(目安) ${dailyCalorieBalance > 0 ? `+${dailyCalorieBalance}` : dailyCalorieBalance}kcal` : '食事と体重で表示'}
+            {hasMeals && canExpenditure ? `収支(目安) ${dailyCalorieBalance > 0 ? `+${dailyCalorieBalance}` : dailyCalorieBalance}kcal` : '食事と体重で表示'}
           </span>
         </div>
 
@@ -650,6 +659,9 @@ export default function AnalyticsScreen({ dataVersion }) {
 
         {activeTab === 'calories' && hasMeals && (
           <div className="space-y-3">
+            {canExpenditure && (
+              <p className="text-[10px] text-slate-500 leading-relaxed">1日の消費カロリーは約{estimatedDailyExpenditure.toLocaleString()}kcal（{expenditureSource}）として、収支を計算しています。</p>
+            )}
             <div className="bg-slate-50/70 rounded-xl p-3 border border-slate-200/70 space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-slate-800">日別カロリー推移</h3>
