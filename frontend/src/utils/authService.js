@@ -1,3 +1,5 @@
+import { queueServerSave } from './serverSync';
+
 const AUTH_STORAGE_KEY = 'raku_auth_user';
 
 export function parseJwtPayload(token) {
@@ -85,6 +87,10 @@ export function setUserStorageData(keyType, data, specificUid = null) {
   try {
     const serialized = typeof data === 'string' ? data : JSON.stringify(data);
     localStorage.setItem(userKey, serialized);
+    const current = getCurrentAuthUser();
+    if (current && current.authProvider === 'server' && current.uid === uid) {
+      queueServerSave(current.id, keyType, serialized);
+    }
     if (uid === 'guest') {
       const legacyKey = `raku_demo_${keyType}`;
       localStorage.setItem(legacyKey, serialized);

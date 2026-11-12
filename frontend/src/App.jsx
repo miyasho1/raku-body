@@ -12,6 +12,8 @@ import LoginScreen from './components/LoginScreen';
 import OnboardingGuide from './components/OnboardingGuide';
 import ProfileSetup from './components/ProfileSetup';
 import AiAndBackupSettings from './components/AiAndBackupSettings';
+import AdminScreen from './components/AdminScreen';
+import { refreshServerUser, signOutServer, flushPending } from './utils/serverSync';
 import { setStoredGeminiKey } from './utils/geminiAnalyzer';
 import { seedOneWeekDemoData, resetAllAppData } from './utils/demoData';
 import {
@@ -50,6 +52,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isMobileGuideOpen, setIsMobileGuideOpen] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('profile_done', false));
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('onboarding_done', false));
   const [lanIp, setLanIp] = useState('192.168.1.10');
@@ -122,6 +125,20 @@ export default function App() {
   useEffect(() => {
     fetchInitialData();
     fetchNetworkInfo();
+  }, []);
+
+  useEffect(() => {
+    if (authUser?.authProvider !== 'server') return;
+    refreshServerUser().then((u) => {
+      if (!u) {
+        clearAuthUserSession();
+        setAuthUser(null);
+        return;
+      }
+      setAuthUserSession(u);
+      setAuthUser(u);
+      flushPending();
+    }).catch(() => {});
   }, []);
 
   const fetchNetworkInfo = async () => {
@@ -229,6 +246,12 @@ export default function App() {
     setAuthUserSession(userObj);
     setAuthUser(userObj);
     setActiveTab('home');
+    const savedHeight = getUserStorageData('body_height', null);
+    const savedTarget = getUserStorageData('target_weight', null);
+    const savedCalories = getUserStorageData('target_calories', null);
+    if (savedHeight) setHeightCm(String(savedHeight));
+    if (savedTarget) setTargetWeightKg(String(savedTarget));
+    if (savedCalories) setTargetCaloriesKcal(String(savedCalories));
     setIsProfileSetupOpen(!getUserStorageData('profile_done', false));
     setIsOnboardingOpen(!getUserStorageData('onboarding_done', false));
     setDataVersion((v) => v + 1);
@@ -244,6 +267,10 @@ export default function App() {
       clearGuestSessionData();
       setStoredGeminiKey('');
     }
+    if (authUser?.authProvider === 'server') {
+      flushPending().finally(() => signOutServer());
+    }
+    setIsAdminOpen(false);
     clearAuthUserSession();
     setAuthUser(null);
     setIsDrawerOpen(false);
@@ -277,7 +304,7 @@ export default function App() {
   };
 
   const handleSeedOneWeekDemo = async () => {
-    if (isSeedingDemo) return;
+    if (isSeedingDemo || authUser?.authProvider === 'server') return;
     setIsSeedingDemo(true);
     try {
       const dataset = await seedOneWeekDemoData(authUser?.uid);
@@ -294,6 +321,7 @@ export default function App() {
   };
 
   const handleExecuteResetData = async () => {
+    if (authUser?.authProvider === 'server') return;
     await resetAllAppData(authUser?.uid);
     localStorage.setItem('raku_device_initialized', 'true');
     setStreakDays(0);
@@ -719,6 +747,23 @@ export default function App() {
                   </button>
                 </form>
 
+                {authUser?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDrawerOpen(false);
+                      setIsAdminOpen(true);
+                    }}
+                    className="w-full bg-indigo-50 hover:bg-indigo-100 p-3.5 rounded-2xl border border-indigo-200/80 flex items-center gap-2.5 text-left cursor-pointer transition-colors"
+                  >
+                    <span className="text-sm">🗂️</span>
+                    <div className="min-w-0">
+                      <span className="text-xs font-extrabold text-indigo-900 block leading-tight">管理者モード</span>
+                      <span className="text-[10px] text-indigo-700 block mt-0.5">参加者の記録の確認と書き出し</span>
+                    </div>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -789,6 +834,7 @@ export default function App() {
                   )}
                 </div>
 
+                {authUser?.authProvider !== 'server' && (
                 <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2">
                   <div className="text-xs font-extrabold text-slate-800">デモデータ操作 / データリセット</div>
                   <button
@@ -807,12 +853,15 @@ export default function App() {
                     🗑️ データを初期化
                   </button>
                 </div>
+                )}
               </div>
 
               <div className="pt-3 mt-3 border-t border-slate-100 space-y-2">
                 <div className="bg-emerald-50/80 rounded-xl p-2 border border-emerald-200/80 text-center">
                   <p className="text-[10px] font-bold text-emerald-900 leading-relaxed">
-                    🔒 記録データはお使いの端末内にのみ保存され、他のユーザーや外部に共有されることはありません
+                    {authUser?.authProvider === 'server'
+                      ? '🔒 記録は研究用のサーバーに保存され、研究の担当者が見ることがあります（AIで分析する写真は、GoogleのGeminiに送られます）'
+                      : '🔒 記録データはお使いの端末内にのみ保存され、他のユーザーに共有されることはありません（AIで分析する写真は、GoogleのGeminiに送られます）'}
                   </p>
                 </div>
                 <button
@@ -826,6 +875,10 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {authUser && isAdminOpen && (
+          <AdminScreen onClose={() => setIsAdminOpen(false)} />
         )}
 
         {authUser && isProfileSetupOpen && (

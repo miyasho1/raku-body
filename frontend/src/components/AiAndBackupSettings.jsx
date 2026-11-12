@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { getStoredGeminiKey, setStoredGeminiKey, testGeminiConnection } from '../utils/geminiAnalyzer';
+import { getCurrentAuthUser } from '../utils/authService';
+import { pushAllLocalRecords } from '../utils/serverSync';
 
 const BACKUP_PREFIX = 'raku_';
 const EXCLUDED_KEYS = ['raku_gemini_api_key'];
@@ -90,6 +92,10 @@ export default function AiAndBackupSettings({ onRestored }) {
       const entries = Object.entries(parsed.data).filter(([k, v]) => k.startsWith(BACKUP_PREFIX) && !EXCLUDED_KEYS.includes(k) && typeof v === 'string');
       if (!window.confirm(`バックアップ（${entries.length}項目）を読み込みます。今の端末の同じ記録は上書きされます。よろしいですか？`)) return;
       entries.forEach(([k, v]) => localStorage.setItem(k, v));
+      const current = getCurrentAuthUser();
+      if (current && current.authProvider === 'server') {
+        await pushAllLocalRecords(current.uid, current.id);
+      }
       setBackupStatus({ type: 'success', text: `${entries.length}項目を読み込みました。` });
       if (onRestored) onRestored();
     } catch {

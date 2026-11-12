@@ -4,8 +4,11 @@ import { jwtDecode } from 'jwt-decode';
 import {
   createAuthenticatedSession,
   createGuestSession,
-  initializeGoogleIdentityServices
+  initializeGoogleIdentityServices,
+  setAuthUserSession
 } from '../utils/authService';
+import { isServerConfigured, pullServerRecords, pushAllLocalRecords, syncGlobalSettingsFromUser } from '../utils/serverSync';
+import AccountAuth from './AccountAuth';
 
 const LAB_PASSCODE = '2026';
 
@@ -118,6 +121,18 @@ export default function LoginScreen({ onLoginSuccess }) {
     onLoginSuccess(user);
   };
 
+  const serverMode = isServerConfigured();
+
+  const handleServerAuthenticated = async (user) => {
+    setAuthUserSession(user);
+    const pulled = await pullServerRecords(user.uid);
+    if (pulled === 0) {
+      await pushAllLocalRecords(user.uid, user.id);
+    }
+    syncGlobalSettingsFromUser(user.uid);
+    onLoginSuccess(user);
+  };
+
   const handleGuestLogin = () => {
     const user = createGuestSession();
     onLoginSuccess(user);
@@ -202,7 +217,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                 招待パスコードを入力してロック解除
               </h2>
               <p className="text-[11px] text-slate-500 leading-relaxed break-all whitespace-normal">
-                部外者アクセス防止のため、研究室メンバー専用の4桁パスコードを入力してください（一度解除すると次回から自動スキップされます）。
+                研究室メンバー向けの入口です。4桁のパスコードを入力してください（一度解除すると次回から自動スキップされます）。
               </p>
             </div>
 
@@ -244,6 +259,21 @@ export default function LoginScreen({ onLoginSuccess }) {
                 </button>
               </div>
             </form>
+          </div>
+        ) : serverMode ? (
+          <div className="space-y-2.5 w-full max-w-full box-border">
+            <div className="text-left px-0.5">
+              <h2 className="text-sm font-extrabold text-slate-900">アカウントで記録をはじめる</h2>
+              <p className="text-[10px] text-slate-500 mt-0.5">はじめての方はアカウントを作ってください。2回目からは「ログイン」で入れます。</p>
+            </div>
+            <AccountAuth onAuthenticated={handleServerAuthenticated} />
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200/80 text-slate-600 font-bold rounded-xl border border-slate-200/80 text-[11px] cursor-pointer"
+            >
+              お試しで使う（記録はこの端末だけに保存）
+            </button>
           </div>
         ) : (
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3.5 w-full max-w-full box-border">
@@ -371,10 +401,7 @@ export default function LoginScreen({ onLoginSuccess }) {
 
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5 w-full max-w-full box-border">
           <div className="flex items-center justify-between w-full">
-            <span className="text-xs font-extrabold text-slate-800">🛡️ プライバシー＆端末内ローカル保護設計</span>
-            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70 shrink-0">
-              標準搭載
-            </span>
+            <span className="text-xs font-extrabold text-slate-800">{serverMode ? '🛡️ プライバシーへの配慮' : '🛡️ プライバシー＆端末内ローカル保護設計'}</span>
           </div>
           <div className="grid grid-cols-2 gap-2.5 w-full">
             <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 min-w-0">
@@ -388,15 +415,17 @@ export default function LoginScreen({ onLoginSuccess }) {
           </div>
           <div className="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-200/80 text-center w-full">
             <p className="text-[11px] font-bold text-emerald-900 leading-relaxed break-all whitespace-normal">
-              🔒 記録データはお使いの端末内にのみ保存され、他のユーザーや外部に共有されることはありません
+              {serverMode ? '🔒 アカウントで使うと、記録は研究用のサーバーに保存され、研究の担当者が見ることがあります。お試しで使うと、記録はこの端末だけに保存されます（AIで分析する写真は、GoogleのGeminiに送られます）' : '🔒 記録データはお使いの端末内にのみ保存され、他のユーザーに共有されることはありません（AIで分析する写真は、GoogleのGeminiに送られます）'}
             </p>
           </div>
         </div>
       </div>
 
-      <p className="text-[10px] text-slate-500 font-semibold text-center py-1">
-        🔒 記録データはお使いの端末内にのみ保存され、他のユーザーや外部に共有されることはありません
-      </p>
+      {!serverMode && (
+        <p className="text-[10px] text-slate-500 font-semibold text-center py-1">
+          🔒 記録データはお使いの端末内にのみ保存され、他のユーザーに共有されることはありません（AIで分析する写真は、GoogleのGeminiに送られます）
+        </p>
+      )}
     </div>
   );
 }
