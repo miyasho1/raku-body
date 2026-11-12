@@ -14,6 +14,7 @@ import ProfileSetup from './components/ProfileSetup';
 import AiAndBackupSettings from './components/AiAndBackupSettings';
 import AdminScreen from './components/AdminScreen';
 import HealthLinkSettings from './components/HealthLinkSettings';
+import HealthImportPage, { readHealthImportParams } from './components/HealthImportPage';
 import AccountAuth from './components/AccountAuth';
 import { finishServerLogin } from './utils/accountLink';
 import { isServerConfigured } from './utils/serverSync';
@@ -59,6 +60,7 @@ export default function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isMobileGuideOpen, setIsMobileGuideOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [healthImport, setHealthImport] = useState(() => readHealthImportParams());
   const [isProfileEdit, setIsProfileEdit] = useState(false);
   const [selectedGoalKey, setSelectedGoalKey] = useState(() => getSavedGoal());
   const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('profile_done', false));
@@ -465,6 +467,10 @@ export default function App() {
       showToast(`接続URL: ${mobileAccessUrl}`);
     }
   };
+
+  if (healthImport) {
+    return <HealthImportPage params={healthImport} onClose={() => setHealthImport(null)} />;
+  }
 
   return (
     <div className="min-h-[100dvh] bg-slate-100 sm:bg-slate-200/70 flex justify-center items-center font-sans sm:py-4 sm:px-4">
