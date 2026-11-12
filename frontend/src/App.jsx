@@ -9,6 +9,7 @@ import BodyAnalysisScreen from './components/BodyAnalysisScreen';
 import MealScreen from './components/MealScreen';
 import WorkoutHubScreen from './components/WorkoutHubScreen';
 import LoginScreen from './components/LoginScreen';
+import OnboardingGuide from './components/OnboardingGuide';
 import { seedOneWeekDemoData, resetAllAppData } from './utils/demoData';
 import {
   getCurrentAuthUser,
@@ -46,6 +47,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isMobileGuideOpen, setIsMobileGuideOpen] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('onboarding_done', false));
   const [lanIp, setLanIp] = useState('192.168.1.10');
   const [heightCm, setHeightCm] = useState(() => localStorage.getItem('raku_body_height') || localStorage.getItem('raku_user_height') || '170');
   const [targetWeightKg, setTargetWeightKg] = useState(() => localStorage.getItem('raku_target_weight') || '62.0');
@@ -192,6 +194,16 @@ export default function App() {
     }
   };
 
+  const handleCloseOnboarding = () => {
+    setUserStorageData('onboarding_done', true);
+    setIsOnboardingOpen(false);
+  };
+
+  const handleOnboardingStartRecording = () => {
+    handleCloseOnboarding();
+    setActiveTab('metrics');
+  };
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -203,6 +215,7 @@ export default function App() {
     setAuthUserSession(userObj);
     setAuthUser(userObj);
     setActiveTab('home');
+    setIsOnboardingOpen(!getUserStorageData('onboarding_done', false));
     setDataVersion((v) => v + 1);
     fetchInitialData();
     showToast(`${userObj.name}さん、ようこそ！`);
@@ -215,6 +228,7 @@ export default function App() {
     clearAuthUserSession();
     setAuthUser(null);
     setIsDrawerOpen(false);
+    setIsOnboardingOpen(false);
     setLogs([]);
     setStreakDays(0);
     setIsLoggedToday(false);
@@ -496,6 +510,8 @@ export default function App() {
                     setActiveTab('workout');
                   }}
                   onOpenBodyAnalysis={() => setActiveTab('body-analysis')}
+                  onOpenMetrics={() => setActiveTab('metrics')}
+                  onOpenMeal={() => setActiveTab('meal')}
                 />
               )}
 
@@ -683,6 +699,21 @@ export default function App() {
                   </button>
                 </form>
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    setIsOnboardingOpen(true);
+                  }}
+                  className="w-full bg-blue-50 hover:bg-blue-100 p-3.5 rounded-2xl border border-blue-200/80 flex items-center gap-2.5 text-left cursor-pointer transition-colors"
+                >
+                  <span className="text-sm">📖</span>
+                  <div className="min-w-0">
+                    <span className="text-xs font-extrabold text-blue-900 block leading-tight">使い方ガイドを見る</span>
+                    <span className="text-[10px] text-blue-700 block mt-0.5">記録の始め方を4ステップで紹介します</span>
+                  </div>
+                </button>
+
                 <div className="bg-slate-50 rounded-2xl border border-slate-200/80 overflow-hidden">
                   <button
                     type="button"
@@ -768,6 +799,13 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {authUser && isOnboardingOpen && (
+          <OnboardingGuide
+            onClose={handleCloseOnboarding}
+            onStartRecording={handleOnboardingStartRecording}
+          />
         )}
 
         {isResetConfirmOpen && (

@@ -11,6 +11,8 @@ import {
   getActiveMyProtein
 } from '../utils/demoData';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
+import WeightTrendCard from './WeightTrendCard';
+import FirstStepsCard from './FirstStepsCard';
 
 export default function HomeScreen({
   streakDays,
@@ -18,7 +20,9 @@ export default function HomeScreen({
   dataVersion,
   onRecordLog,
   onSelectWorkoutType,
-  onOpenBodyAnalysis
+  onOpenBodyAnalysis,
+  onOpenMetrics,
+  onOpenMeal
 }) {
   const [loading, setLoading] = useState(false);
   const [isProteinSheetOpen, setIsProteinSheetOpen] = useState(false);
@@ -56,6 +60,18 @@ export default function HomeScreen({
   const [todayCarbs, setTodayCarbs] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [recentTimeline, setRecentTimeline] = useState([]);
+  const [weightMetrics, setWeightMetrics] = useState(() => {
+    const cached = getUserStorageData('metrics', []);
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [hasAnyMeal, setHasAnyMeal] = useState(() => {
+    const cached = getUserStorageData('meals', []);
+    return Array.isArray(cached) && cached.length > 0;
+  });
+  const [hasAnyWorkout, setHasAnyWorkout] = useState(() => {
+    const cached = getUserStorageData('workouts', []);
+    return Array.isArray(cached) && cached.length > 0;
+  });
 
   const ocrFileInputRef = useRef(null);
   const quickBodyInputRef = useRef(null);
@@ -83,7 +99,17 @@ export default function HomeScreen({
     setProteinPresets(getProteinPresets());
     fetchMyProtein();
     fetchTodayMealStatus();
+    fetchWeightMetrics();
   }, [isLoggedToday, dataVersion]);
+
+  const fetchWeightMetrics = () => {
+    const cachedMetrics = getUserStorageData('metrics', []);
+    const cachedMeals = getUserStorageData('meals', []);
+    const cachedWorkouts = getUserStorageData('workouts', []);
+    setWeightMetrics(Array.isArray(cachedMetrics) ? cachedMetrics : []);
+    setHasAnyMeal(Array.isArray(cachedMeals) && cachedMeals.length > 0);
+    setHasAnyWorkout(Array.isArray(cachedWorkouts) && cachedWorkouts.length > 0);
+  };
 
   useEffect(() => {
     return () => {
@@ -405,6 +431,30 @@ export default function HomeScreen({
   const currentTotalCal = Math.round((myProtein.calories || 120) + proteinBases[selectedBase].addCal);
   const targetCal = parseInt(localStorage.getItem('raku_target_calories') || '2000', 10) || 2000;
   const remainingProtein = Math.max(0, Math.round((100 - todayProtein) * 10) / 10);
+  const targetWeight = parseFloat(localStorage.getItem('raku_target_weight') || '') || null;
+  const firstSteps = [
+    {
+      key: 'weight',
+      label: '体重を記録する',
+      desc: 'ホームの推移グラフの出発点になります',
+      done: weightMetrics.length > 0,
+      onClick: onOpenMetrics
+    },
+    {
+      key: 'meal',
+      label: '食事を記録する',
+      desc: '「手動」タブでメニュー名とカロリーを選びます',
+      done: hasAnyMeal,
+      onClick: onOpenMeal
+    },
+    {
+      key: 'workout',
+      label: '運動を記録する',
+      desc: '宅トレかジムを選んで記録します',
+      done: hasAnyWorkout,
+      onClick: () => onSelectWorkoutType('home')
+    }
+  ];
 
   return (
     <div className="flex flex-col space-y-3.5 pb-3">
@@ -415,6 +465,15 @@ export default function HomeScreen({
           </div>
         </div>
       )}
+
+      <FirstStepsCard steps={firstSteps} />
+
+      <WeightTrendCard
+        metrics={weightMetrics}
+        targetWeight={targetWeight}
+        todayStr={getTodayDateString()}
+        onRecord={onOpenMetrics}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <section

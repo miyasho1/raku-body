@@ -12,36 +12,51 @@ export default function WheelPicker({
   subFontSize = 'text-sm'
 }) {
   const containerRef = useRef(null);
+  const lockedUntilRef = useRef(0);
+  const unlockTimerRef = useRef(null);
+  const latestRef = useRef({ items, value, onChange, itemHeight });
+  latestRef.current = { items, value, onChange, itemHeight };
 
   const getItemValue = (item) => (item !== null && typeof item === 'object' && 'value' in item ? item.value : item);
   const getItemLabel = (item) => (item !== null && typeof item === 'object' && 'label' in item ? item.label : item);
 
-  useEffect(() => {
-    if (containerRef.current) {
-      const idx = items.findIndex((it) => getItemValue(it) === value);
-      if (idx !== -1) {
-        containerRef.current.scrollTop = idx * itemHeight;
-      }
-    }
-  }, [value, items, itemHeight]);
-
-  const handleScroll = (e) => {
-    const idx = Math.round(e.target.scrollTop / itemHeight);
-    if (idx >= 0 && idx < items.length) {
-      const nextVal = getItemValue(items[idx]);
-      if (nextVal !== value) {
-        onChange(nextVal);
+  const syncValueFromScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const { items: curItems, value: curValue, onChange: curOnChange, itemHeight: curHeight } = latestRef.current;
+    const idx = Math.round(el.scrollTop / curHeight);
+    if (idx >= 0 && idx < curItems.length) {
+      const nextVal = getItemValue(curItems[idx]);
+      if (nextVal !== curValue) {
+        curOnChange(nextVal);
       }
     }
   };
 
-  const handleItemClick = (item, idx) => {
-    if (containerRef.current) {
-      containerRef.current.scrollTo({
-        top: idx * itemHeight,
-        behavior: 'smooth'
-      });
+  const lockScrollSync = (ms) => {
+    lockedUntilRef.current = Date.now() + ms;
+    clearTimeout(unlockTimerRef.current);
+    unlockTimerRef.current = setTimeout(syncValueFromScroll, ms + 10);
+  };
+
+  useEffect(() => () => clearTimeout(unlockTimerRef.current), []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const idx = items.findIndex((it) => getItemValue(it) === value);
+    if (idx !== -1 && Math.round(el.scrollTop / itemHeight) !== idx) {
+      lockScrollSync(150);
+      el.scrollTop = idx * itemHeight;
     }
+  }, [value, items, itemHeight]);
+
+  const handleScroll = () => {
+    if (Date.now() < lockedUntilRef.current) return;
+    syncValueFromScroll();
+  };
+
+  const handleItemClick = (item) => {
     onChange(getItemValue(item));
   };
 
@@ -59,7 +74,7 @@ export default function WheelPicker({
           paddingTop: `${padY}px`,
           paddingBottom: `${padY}px`
         }}
-        className="h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth"
+        className="h-full overflow-y-scroll snap-y snap-mandatory"
       >
         {items.map((item, idx) => {
           const itemVal = getItemValue(item);
@@ -68,7 +83,7 @@ export default function WheelPicker({
           return (
             <div
               key={idx}
-              onClick={() => handleItemClick(item, idx)}
+              onClick={() => handleItemClick(item)}
               style={{ height: `${itemHeight}px` }}
               className={`snap-center flex items-center ${
                 textAlign === 'right' || textAlign === 'end'
