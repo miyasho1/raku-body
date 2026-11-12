@@ -57,6 +57,7 @@ export default function App() {
   const [isMobileGuideOpen, setIsMobileGuideOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isProfileEdit, setIsProfileEdit] = useState(false);
+  const [selectedGoalKey, setSelectedGoalKey] = useState(() => getSavedGoal());
   const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('profile_done', false));
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('onboarding_done', false));
   const [lanIp, setLanIp] = useState('192.168.1.10');
@@ -240,6 +241,7 @@ export default function App() {
   };
 
   const applyGoal = (key) => {
+    setSelectedGoalKey(key || null);
     if (!key) return;
     setGoal((prev) => ({ ...prev, target_focus: key, preset_name: goalLabel(key) }));
   };
@@ -752,14 +754,15 @@ export default function App() {
                   <div className="flex items-center justify-between gap-2.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80">
                     <label className="text-[11px] font-bold text-slate-700 shrink-0">目的</label>
                     <select
-                      value={getSavedGoal() || ''}
+                      value={selectedGoalKey || ''}
                       onChange={(e) => {
                         saveGoal(e.target.value);
                         applyGoal(e.target.value);
+                        showToast(`目的を「${goalLabel(e.target.value)}」にしました（運動のおすすめコースに反映されます）`);
                       }}
                       className="text-xs font-extrabold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 focus:outline-none focus:border-blue-500"
                     >
-                      {!getSavedGoal() && <option value="" disabled>未設定</option>}
+                      {!selectedGoalKey && <option value="" disabled>未設定</option>}
                       {GOAL_OPTIONS.map((g) => (
                         <option key={g.key} value={g.key}>{g.label}</option>
                       ))}
@@ -834,7 +837,7 @@ export default function App() {
                   <span className="text-sm">📖</span>
                   <div className="min-w-0">
                     <span className="text-xs font-extrabold text-blue-900 block leading-tight">使い方ガイドを見る</span>
-                    <span className="text-[10px] text-blue-700 block mt-0.5">記録の始め方を4ステップで紹介します</span>
+                    <span className="text-[10px] text-blue-700 block mt-0.5">記録の始め方を5ステップで紹介します</span>
                   </div>
                 </button>
 

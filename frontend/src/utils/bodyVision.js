@@ -67,7 +67,13 @@ export async function inspectBodyPhoto(file) {
   const { img, url } = loaded;
   try {
     const faceResult = detectors.face.detect(img);
-    const faceByDetector = (faceResult.detections || []).length > 0;
+    const detections = faceResult.detections || [];
+    const faceByDetector = detections.length > 0;
+    let faceBottom = 0;
+    detections.forEach((d) => {
+      const b = d.boundingBox;
+      if (b) faceBottom = Math.max(faceBottom, (b.originY + b.height) / img.naturalHeight);
+    });
 
     const poseResult = detectors.pose.detect(img);
     const landmarks = (poseResult.landmarks || [])[0] || null;
@@ -75,6 +81,13 @@ export async function inspectBodyPhoto(file) {
       const p = landmarks[i];
       return inFrame(p) && (p.visibility ?? 0) >= FACE_VISIBILITY;
     });
+
+    if (faceByPose) {
+      FACE_POINTS.forEach((i) => {
+        const p = landmarks[i];
+        if (inFrame(p) && (p.visibility ?? 0) >= FACE_VISIBILITY) faceBottom = Math.max(faceBottom, p.y);
+      });
+    }
 
     let shoulderHipRatio = null;
     if (landmarks) {
@@ -96,6 +109,7 @@ export async function inspectBodyPhoto(file) {
     return {
       ok: true,
       faceDetected: faceByDetector || faceByPose,
+      faceBottom: Math.min(0.9, faceBottom),
       poseFound: Boolean(landmarks),
       shoulderHipRatio
     };

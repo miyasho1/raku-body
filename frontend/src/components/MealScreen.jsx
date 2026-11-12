@@ -24,6 +24,8 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const NO_PROTEIN = { product_name: '未登録', serving_size_g: 0, calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 };
+
 export default function MealScreen({ onRecordSuccess, dataVersion }) {
   const getNowTime = () => {
     const d = new Date();
@@ -100,16 +102,17 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
 
   const [proteinPresets, setProteinPresets] = useState(() => getProteinPresets());
   const [myProtein, setMyProtein] = useState(() => getActiveMyProtein());
+  const mp = myProtein || NO_PROTEIN;
   const [isProteinSheetOpen, setIsProteinSheetOpen] = useState(false);
   const [selectedBase, setSelectedBase] = useState('water');
   const [proteinRecordedAnim, setProteinRecordedAnim] = useState(false);
 
-  const [settingName, setSettingName] = useState('ゴールドスタンダード 100%ホエイ');
-  const [settingServingSize, setSettingServingSize] = useState(30.0);
-  const [settingProtein, setSettingProtein] = useState(24.0);
-  const [settingCalories, setSettingCalories] = useState(120);
-  const [settingFat, setSettingFat] = useState(1.0);
-  const [settingCarbs, setSettingCarbs] = useState(2.0);
+  const [settingName, setSettingName] = useState('');
+  const [settingServingSize, setSettingServingSize] = useState('');
+  const [settingProtein, setSettingProtein] = useState('');
+  const [settingCalories, setSettingCalories] = useState('');
+  const [settingFat, setSettingFat] = useState('');
+  const [settingCarbs, setSettingCarbs] = useState('');
   const [labelAiResult, setLabelAiResult] = useState(null);
   const [isAnalyzingLabel, setIsAnalyzingLabel] = useState(false);
   const [isSavingProtein, setIsSavingProtein] = useState(false);
@@ -193,13 +196,14 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
     }
   };
 
-  const syncSettingState = (data) => {
-    setSettingName(data.product_name || 'ゴールドスタンダード 100%ホエイ');
-    setSettingServingSize(data.serving_size_g || 30.0);
-    setSettingProtein(data.protein_g !== undefined ? data.protein_g : 24.0);
-    setSettingCalories(data.calories || 120);
-    setSettingFat(data.fat_g !== undefined ? data.fat_g : 1.0);
-    setSettingCarbs(data.carbs_g !== undefined ? data.carbs_g : 2.0);
+  const syncSettingState = (raw) => {
+    const data = raw || {};
+    setSettingName(data.product_name || '');
+    setSettingServingSize(data.serving_size_g ?? '');
+    setSettingProtein(data.protein_g ?? '');
+    setSettingCalories(data.calories ?? '');
+    setSettingFat(data.fat_g ?? '');
+    setSettingCarbs(data.carbs_g ?? '');
   };
 
   const handleSelectPresetProtein = async (preset) => {
@@ -455,6 +459,10 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
   const handleSaveProteinSettings = async (e) => {
     e.preventDefault();
     if (isSavingProtein) return;
+    if (!String(settingName || "").trim() || !(parseFloat(settingProtein) > 0)) {
+      setMessage({ type: "error", text: "商品名と、1食あたりのタンパク質（0より大きい数）を入れてください。" });
+      return;
+    }
     setIsSavingProtein(true);
 
     const { preset, list } = saveProteinPreset({
@@ -529,34 +537,34 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
   };
 
   const handleDrinkProtein = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || !myProtein) return;
     setIsSubmitting(true);
 
     const baseInfo = proteinBases[selectedBase];
-    const baseP = myProtein.protein_g !== undefined ? myProtein.protein_g : 24.0;
-    const baseFat = myProtein.fat_g !== undefined ? myProtein.fat_g : 1.0;
-    const baseCarbs = myProtein.carbs_g !== undefined ? myProtein.carbs_g : 2.0;
+    const baseP = mp.protein_g || 0;
+    const baseFat = mp.fat_g || 0;
+    const baseCarbs = mp.carbs_g || 0;
 
     const totalProtein = Number((baseP + baseInfo.addP).toFixed(1));
-    const totalCalories = Math.round((myProtein.calories || 120) + baseInfo.addCal);
+    const totalCalories = Math.round((mp.calories || 0) + baseInfo.addCal);
     const totalFat = Number((baseFat + baseInfo.addFat).toFixed(1));
     const totalCarbs = Number((baseCarbs + baseInfo.addCarbs).toFixed(1));
     const currentTime = getNowTime();
 
     const analysisObj = {
-      meal_name: `${myProtein.product_name}（${baseInfo.name}割り）`,
+      meal_name: `${mp.product_name}（${baseInfo.name}割り）`,
       calories: totalCalories,
       protein_level: '高',
       carbs_level: totalCarbs > 10 ? '普通' : '低',
       fat_level: totalFat > 8 ? '普通' : '低',
       feedback_comment: `良質なタンパク質${totalProtein}gを補給完了！`,
-      ...(myProtein.ai_original ? { source: myProtein.source, ai_original: myProtein.ai_original } : {})
+      ...(mp.ai_original ? { source: mp.source, ai_original: mp.ai_original } : {})
     };
 
     const payload = {
       meal_type: currentTime,
       meal_time: currentTime,
-      menu_name: `${myProtein.product_name}（${baseInfo.name}割り）`,
+      menu_name: `${mp.product_name}（${baseInfo.name}割り）`,
       calories: totalCalories,
       protein_level: '高',
       carbs_level: totalCarbs > 10 ? '普通' : '低',
@@ -610,11 +618,11 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
     return m.meal_type || '記録';
   };
 
-  const baseP = myProtein.protein_g !== undefined ? myProtein.protein_g : 24.0;
-  const baseFat = myProtein.fat_g !== undefined ? myProtein.fat_g : 1.0;
-  const baseCarbs = myProtein.carbs_g !== undefined ? myProtein.carbs_g : 2.0;
+  const baseP = mp.protein_g || 0;
+  const baseFat = mp.fat_g || 0;
+  const baseCarbs = mp.carbs_g || 0;
   const currentTotalP = Number((baseP + proteinBases[selectedBase].addP).toFixed(1));
-  const currentTotalCal = Math.round((myProtein.calories || 120) + proteinBases[selectedBase].addCal);
+  const currentTotalCal = Math.round((mp.calories || 0) + proteinBases[selectedBase].addCal);
   const currentTotalFat = Number((baseFat + proteinBases[selectedBase].addFat).toFixed(1));
   const currentTotalCarbs = Number((baseCarbs + proteinBases[selectedBase].addCarbs).toFixed(1));
 
@@ -669,11 +677,11 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
                   ⭐ マイプロテイン
                 </span>
                 <span className="text-[10px] text-slate-500 font-bold">
-                  1食 {myProtein.serving_size_g || 30}g
+                  {myProtein ? `1食 ${mp.serving_size_g || 0}g` : '未登録'}
                 </span>
               </div>
               <h2 className="text-xs font-bold text-slate-900 truncate mt-0.5">
-                {myProtein.product_name}
+                {myProtein ? mp.product_name : '成分表を読み取るか、数値を入れて登録してください'}
               </h2>
             </div>
           </div>
@@ -692,6 +700,11 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
             <button
               type="button"
               onClick={() => {
+                if (!myProtein) {
+                  setActiveMainTab('ocr');
+                  setMessage({ type: 'error', text: '先に、よく飲むプロテインを登録してください（成分表OCRのタブ）。' });
+                  return;
+                }
                 setRecordTime(getNowTime());
                 setIsProteinSheetOpen(true);
               }}
@@ -705,19 +718,19 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
         <div className="grid grid-cols-4 gap-2">
           <div className="bg-emerald-50/50 rounded-xl p-2 border border-emerald-100 text-center">
             <span className="text-[9px] text-slate-500 block font-medium">エネルギー</span>
-            <span className="text-[11px] font-bold text-slate-900 block">{myProtein.calories || 120}kcal</span>
+            <span className="text-[11px] font-bold text-slate-900 block">{mp.calories || 0}kcal</span>
           </div>
           <div className="bg-emerald-50/50 rounded-xl p-2 border border-emerald-100 text-center">
             <span className="text-[9px] text-emerald-700 block font-bold">タンパク質</span>
-            <span className="text-[11px] font-bold text-emerald-700 block">{myProtein.protein_g}g</span>
+            <span className="text-[11px] font-bold text-emerald-700 block">{mp.protein_g}g</span>
           </div>
           <div className="bg-emerald-50/50 rounded-xl p-2 border border-emerald-100 text-center">
             <span className="text-[9px] text-slate-500 block font-medium">脂質</span>
-            <span className="text-[11px] font-bold text-slate-900 block">{myProtein.fat_g !== undefined ? myProtein.fat_g : 1.0}g</span>
+            <span className="text-[11px] font-bold text-slate-900 block">{mp.fat_g || 0}g</span>
           </div>
           <div className="bg-emerald-50/50 rounded-xl p-2 border border-emerald-100 text-center">
             <span className="text-[9px] text-slate-500 block font-medium">炭水化物</span>
-            <span className="text-[11px] font-bold text-slate-900 block">{myProtein.carbs_g !== undefined ? myProtein.carbs_g : 2.0}g</span>
+            <span className="text-[11px] font-bold text-slate-900 block">{mp.carbs_g || 0}g</span>
           </div>
         </div>
       </section>
@@ -1584,7 +1597,7 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
               <span className="text-[10px] font-bold text-slate-600 block">⭐ マイプロテイン切替</span>
               <div className="grid grid-cols-2 gap-1.5">
                 {proteinPresets.slice(0, 4).map((p) => {
-                  const isCurrent = p.product_name === myProtein.product_name;
+                  const isCurrent = p.product_name === mp.product_name;
                   return (
                     <button
                       key={p.id || p.product_name}

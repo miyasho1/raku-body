@@ -7,7 +7,7 @@ export function revokeImagePreviewUrl(url) {
   }
 }
 
-export async function processPrivacyImage(file, shouldCropFace = true) {
+export async function processPrivacyImage(file, shouldCropFace = true, topRatio = 0.18) {
   if (!file) {
     return { processedFile: null, previewUrl: '' };
   }
@@ -18,7 +18,7 @@ export async function processPrivacyImage(file, shouldCropFace = true) {
 
     img.onload = () => {
       try {
-        const cropRatio = shouldCropFace ? 0.18 : 0;
+        const cropRatio = shouldCropFace ? Math.max(0, Math.min(0.9, topRatio)) : 0;
         const srcWidth = img.naturalWidth || img.width || 600;
         const srcHeight = img.naturalHeight || img.height || 800;
         const cropY = Math.round(srcHeight * cropRatio);
@@ -415,27 +415,30 @@ export async function analyzeBodyImage(imageFile) {
     const mimeType = imageFile.type || 'image/jpeg';
 
     const prompt = `あなたはプロのパーソナルトレーナー・体型骨格診断AIです。
-写真からユーザーの体型タイプ、推定体脂肪率、部位ごとの点数（肩・胸・腕・お腹の引き締まり・脚：各1〜5の整数。肩・胸・腕・脚は 1=筋肉が少ない〜5=とても発達している、お腹の引き締まりは 1=お腹周りがゆるい〜5=とても引き締まっている）、部位別ギャップ、おすすめメニュー、アドバイスを分析し、以下のJSON形式のみを出力してください。
+写真からユーザーの体型タイプ、推定体脂肪率、部位ごとの点数（肩・胸・腕・お腹の引き締まり・脚：各1〜5の整数。肩・胸・腕・脚は 1=筋肉が少ない〜5=とても発達している、お腹の引き締まりは 1=お腹周りがゆるい〜5=とても引き締まっている）、部位別ギャップ、おすすめメニュー、アドバイスを分析し、以下のJSON形式のみを出力してください。（　）の中は説明なので、写真から判断した値に置き換えてください。数値の項目は、文字ではなく数値で出してください。
+コメントは、ほめすぎず、客観的に書いてください。写真から見える特徴（例：肩幅に対してウエストが細い、お腹の前に張り出しがある）を根拠として書き、写真から判断できないことは書かないでください。病気の診断や、医療的な判断はしないでください。
 
 {
   "body_type": "逆三角形・アスリート型（または標準・細身・筋肉質など）",
-  "estimated_body_fat": 15.5,
-  "summary": "現状の強みを褒めつつ理想体型へ向けた前向きな総括コメント",
-  "analysis_summary": "胸板と肩のラインが発達しており、姿勢も良好です。",
-  "focus_areas": ["大胸筋・厚み", "背中・逆三角形", "体幹・くびれ"],
+  "estimated_body_fat": "（写真から推定した体脂肪率。%の数値だけ）",
+  "summary": "写真から見える特徴にもとづく、客観的な総評（2〜3文）",
+  "strengths": ["良いところ1（見た目の根拠つき）", "良いところ2"],
+  "improvements": ["伸ばすとよいところ1（見た目の根拠つき）", "伸ばすとよいところ2"],
+  "analysis_summary": "（写真から見える特徴を1文で）",
+  "focus_areas": ["（重点にするとよい部位）"],
   "body_scores": {
-    "shoulders": 4,
-    "chest": 4,
-    "arms": 3,
-    "waist": 2,
-    "legs": 3
+    "shoulders": "（1〜5の整数）",
+    "chest": "（1〜5の整数）",
+    "arms": "（1〜5の整数）",
+    "waist": "（1〜5の整数）",
+    "legs": "（1〜5の整数）"
   },
   "parts_analysis": [
-    {"part": "胸（大胸筋）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高"},
-    {"part": "背中（広背筋）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高"},
-    {"part": "腕・肩（三角筋・上腕）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "中"},
-    {"part": "ウエスト・腹筋", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "中"},
-    {"part": "脚（大腿部・ヒップ）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高"}
+    {"part": "胸（大胸筋）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高・中・低のどれか"},
+    {"part": "背中（広背筋）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高・中・低のどれか"},
+    {"part": "腕・肩（三角筋・上腕）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高・中・低のどれか"},
+    {"part": "ウエスト・腹筋", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高・中・低のどれか"},
+    {"part": "脚（大腿部・ヒップ）", "status": "現在の状態", "target": "理想の目標", "gap": "差分ポイント", "priority": "高・中・低のどれか"}
   ],
   "compound_menu": [
     {"name": "チェストプレスマシン", "category": "gym", "reps": 10, "sets": 3, "weight": 35, "point": "胸の厚みを強化する理由"},
@@ -451,7 +454,7 @@ export async function analyzeBodyImage(imageFile) {
       {"name": "サイドレイズ", "sets": 3, "reps": 15, "weight": 8}
     ]
   },
-  "advice": "肩と広背筋を重点的に鍛えることで、より美しい逆三角形シルエットが強調されます。"
+  "advice": "次の2週間で取り組むとよいことを、具体的に1〜2文で"
 }`;
 
     const parsed = await executeGeminiCall(prompt, base64Data, mimeType);

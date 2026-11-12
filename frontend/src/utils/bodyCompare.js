@@ -12,20 +12,31 @@ export const METRIC_DEFS = [
 ];
 
 const num = (v) => {
-  const n = Number(v);
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v !== 'string') return null;
+  if (/\d\s*(?:[〜～~\-ー－–—]|から)\s*\d/.test(v)) return null;
+  const m = v.match(/-?\d+(?:\.\d+)?/);
+  const n = m ? parseFloat(m[0]) : NaN;
   return Number.isFinite(n) ? n : null;
 };
 
 const score = (v) => {
   const n = num(v);
-  return n === null ? null : Math.max(1, Math.min(5, n));
+  if (n === null || !Number.isInteger(n) || n < 1 || n > 5) return null;
+  return n;
+};
+
+const bodyFat = (v) => {
+  const n = num(v);
+  return n === null || n < 3 || n > 60 ? null : n;
 };
 
 export function buildBodyMetrics(analysis, shoulderHipRatio) {
   const s = (analysis && analysis.body_scores) || {};
   return {
     shoulder_hip_ratio: num(shoulderHipRatio),
-    body_fat: num(analysis && analysis.estimated_body_fat),
+    body_fat: bodyFat(analysis && analysis.estimated_body_fat),
     shoulders: score(s.shoulders),
     chest: score(s.chest),
     arms: score(s.arms),
@@ -98,7 +109,8 @@ export async function analyzeBodyPhoto(file) {
 }
 
 export const BODY_PHOTO_MESSAGES = {
-  face: '顔が写っているため、この写真は送りませんでした。顔が入らないように撮った写真を選んでください。',
+  faceOnSelect: '⚠️ 顔が写っています。このままでは使えません（AIにも送っていません）。切り取るか、首から下を撮り直してください。',
+  face: '⚠️ 顔が写っています。この写真は使えません（AIにも送っていません）。顔が入らないように、首から下を撮り直してください。',
   check_failed: '顔が写っていないかを確かめられなかったため、この写真は送りませんでした。通信を確認して、もう一度試してください。',
   ai_failed: 'AIで分析できませんでした（AIの設定がない、通信に失敗した、または写真から読み取れなかった）。メニューの「AI（Gemini）の設定」を確認してください。'
 };

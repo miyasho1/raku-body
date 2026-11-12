@@ -11,8 +11,12 @@ import {
 } from '../utils/demoData';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
 import { analyzeBodyPhoto, compareToIdeal, BODY_PHOTO_MESSAGES } from '../utils/bodyCompare';
+import { inspectBodyPhoto } from '../utils/bodyVision';
+import PhotoTrimmer from './PhotoTrimmer';
 import WeightTrendCard from './WeightTrendCard';
 import FirstStepsCard from './FirstStepsCard';
+
+const NO_PROTEIN = { product_name: '未登録', serving_size_g: 0, calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 };
 
 export default function HomeScreen({
   streakDays,
@@ -34,18 +38,18 @@ export default function HomeScreen({
 
   const [proteinPresets, setProteinPresets] = useState(() => getProteinPresets());
   const [myProtein, setMyProtein] = useState(() => getActiveMyProtein());
+  const mp = myProtein || NO_PROTEIN;
 
   const [ocrName, setOcrName] = useState('');
-  const [ocrServingG, setOcrServingG] = useState(30.0);
-  const [ocrCalories, setOcrCalories] = useState(120);
-  const [ocrProteinG, setOcrProteinG] = useState(24.0);
-  const [ocrFatG, setOcrFatG] = useState(1.0);
-  const [ocrCarbsG, setOcrCarbsG] = useState(2.0);
+  const [ocrServingG, setOcrServingG] = useState('');
+  const [ocrCalories, setOcrCalories] = useState('');
+  const [ocrProteinG, setOcrProteinG] = useState('');
+  const [ocrFatG, setOcrFatG] = useState('');
+  const [ocrCarbsG, setOcrCarbsG] = useState('');
   const [isOcrRunning, setIsOcrRunning] = useState(false);
   const [ocrMessage, setOcrMessage] = useState(null);
 
   const [isQuickBodyModalOpen, setIsQuickBodyModalOpen] = useState(false);
-  const [isFaceCropEnabled, setIsFaceCropEnabled] = useState(true);
   const [rawBodyFile, setRawBodyFile] = useState(null);
   const [croppedBodyFile, setCroppedBodyFile] = useState(null);
   const [bodyPreviewUrl, setBodyPreviewUrl] = useState('');
@@ -53,6 +57,7 @@ export default function HomeScreen({
   const [quickBodyResult, setQuickBodyResult] = useState(null);
   const [quickBodyError, setQuickBodyError] = useState('');
   const [ocrAiResult, setOcrAiResult] = useState(null);
+  const [quickTrim, setQuickTrim] = useState(null);
 
   const [todayMealLogged, setTodayMealLogged] = useState(false);
   const [todayProteinLogged, setTodayProteinLogged] = useState(false);
@@ -238,13 +243,14 @@ export default function HomeScreen({
     }
   };
 
-  const syncOcrFields = (item) => {
-    setOcrName(item.product_name || 'ゴールドスタンダード 100%ホエイ');
-    setOcrServingG(item.serving_size_g || 30.0);
-    setOcrCalories(item.calories || 120);
-    setOcrProteinG(item.protein_g !== undefined ? item.protein_g : 24.0);
-    setOcrFatG(item.fat_g !== undefined ? item.fat_g : 1.0);
-    setOcrCarbsG(item.carbs_g !== undefined ? item.carbs_g : 2.0);
+  const syncOcrFields = (raw) => {
+    const item = raw || {};
+    setOcrName(item.product_name || '');
+    setOcrServingG(item.serving_size_g ?? '');
+    setOcrCalories(item.calories ?? '');
+    setOcrProteinG(item.protein_g ?? '');
+    setOcrFatG(item.fat_g ?? '');
+    setOcrCarbsG(item.carbs_g ?? '');
   };
 
   const handleSelectProteinPreset = async (preset) => {
@@ -295,6 +301,10 @@ export default function HomeScreen({
 
   const handleSaveOcrPreset = async (e) => {
     e.preventDefault();
+    if (!String(ocrName || "").trim() || !(parseFloat(ocrProteinG) > 0)) {
+      setOcrMessage("商品名と、1食あたりのタンパク質（0より大きい数）を入れてください。");
+      return;
+    }
     const { preset, list } = saveProteinPreset({
       product_name: ocrName,
       serving_size_g: ocrServingG,
@@ -327,22 +337,22 @@ export default function HomeScreen({
     if (!file) return;
     if (bodyPreviewUrl) revokeImagePreviewUrl(bodyPreviewUrl);
     setRawBodyFile(file);
-    const processed = await processPrivacyImage(file, isFaceCropEnabled);
+    const processed = await processPrivacyImage(file, false);
+    setQuickBodyResult(null);
+    const check = await inspectBodyPhoto(processed.processedFile);
+    if (check.ok && check.faceDetected) {
+      revokeImagePreviewUrl(processed.previewUrl);
+      setRawBodyFile(null);
+      setCroppedBodyFile(null);
+      setBodyPreviewUrl('');
+      if (quickBodyInputRef.current) quickBodyInputRef.current.value = '';
+      setQuickBodyError(BODY_PHOTO_MESSAGES.faceOnSelect);
+      setQuickTrim({ file: processed.processedFile, ratio: Math.min(0.8, (check.faceBottom || 0.2) + 0.08) });
+      return;
+    }
     setCroppedBodyFile(processed.processedFile);
     setBodyPreviewUrl(processed.previewUrl);
-    setQuickBodyResult(null);
     setQuickBodyError('');
-  };
-
-  const handleToggleQuickFaceCrop = async () => {
-    const nextState = !isFaceCropEnabled;
-    setIsFaceCropEnabled(nextState);
-    if (rawBodyFile) {
-      if (bodyPreviewUrl) revokeImagePreviewUrl(bodyPreviewUrl);
-      const processed = await processPrivacyImage(rawBodyFile, nextState);
-      setCroppedBodyFile(processed.processedFile);
-      setBodyPreviewUrl(processed.previewUrl);
-    }
   };
 
   const handleRunQuickBodyAnalysis = async () => {
@@ -389,16 +399,16 @@ export default function HomeScreen({
   };
 
   const handleDrinkProtein = async () => {
-    if (proteinSubmitting) return;
+    if (proteinSubmitting || !myProtein) return;
     setProteinSubmitting(true);
 
     const baseInfo = proteinBases[selectedBase];
-    const baseP = myProtein.protein_g !== undefined ? myProtein.protein_g : 24.0;
-    const baseFat = myProtein.fat_g !== undefined ? myProtein.fat_g : 1.0;
-    const baseCarbs = myProtein.carbs_g !== undefined ? myProtein.carbs_g : 2.0;
+    const baseP = mp.protein_g || 0;
+    const baseFat = mp.fat_g || 0;
+    const baseCarbs = mp.carbs_g || 0;
 
     const totalProtein = Number((baseP + baseInfo.addP).toFixed(1));
-    const totalCalories = Math.round((myProtein.calories || 120) + baseInfo.addCal);
+    const totalCalories = Math.round((mp.calories || 0) + baseInfo.addCal);
     const totalFat = Number((baseFat + baseInfo.addFat).toFixed(1));
     const totalCarbs = Number((baseCarbs + baseInfo.addCarbs).toFixed(1));
     const currentTime = getNowTime();
@@ -407,7 +417,7 @@ export default function HomeScreen({
     const mealPayload = {
       meal_type: currentTime,
       meal_time: currentTime,
-      menu_name: `${myProtein.product_name}（${baseInfo.name}割り）`,
+      menu_name: `${mp.product_name}（${baseInfo.name}割り）`,
       calories: totalCalories,
       protein_level: '高',
       carbs_level: totalCarbs > 10 ? '普通' : '低',
@@ -417,7 +427,7 @@ export default function HomeScreen({
       carbs_g: totalCarbs,
       image_url: '',
       note: `プロテインクイック記録（割り材: ${baseInfo.name}、P:${totalProtein}g）`,
-      ...(myProtein.ai_original ? { analysis_json: JSON.stringify({ source: myProtein.source, ai_original: myProtein.ai_original }) } : {})
+      ...(mp.ai_original ? { analysis_json: JSON.stringify({ source: mp.source, ai_original: mp.ai_original }) } : {})
     };
 
     try {
@@ -455,8 +465,8 @@ export default function HomeScreen({
     setProteinSubmitting(false);
   };
 
-  const currentTotalP = Number(((myProtein.protein_g || 24.0) + proteinBases[selectedBase].addP).toFixed(1));
-  const currentTotalCal = Math.round((myProtein.calories || 120) + proteinBases[selectedBase].addCal);
+  const currentTotalP = Number(((mp.protein_g || 0) + proteinBases[selectedBase].addP).toFixed(1));
+  const currentTotalCal = Math.round((mp.calories || 0) + proteinBases[selectedBase].addCal);
   const targetCal = parseInt(localStorage.getItem('raku_target_calories') || '2000', 10) || 2000;
   const remainingProtein = Math.max(0, Math.round((100 - todayProtein) * 10) / 10);
   const targetWeight = parseFloat(localStorage.getItem('raku_target_weight') || '') || null;
@@ -543,12 +553,12 @@ export default function HomeScreen({
               </svg>
             </div>
             <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md border border-emerald-200/70">
-              P:{myProtein.protein_g}g / OCR
+              {myProtein ? `P:${mp.protein_g}g / OCR` : '未登録'}
             </span>
           </div>
           <div>
             <span className="text-xs font-extrabold text-slate-900 block leading-snug">プロテイン摂取の記録</span>
-            <p className="text-[10px] text-slate-500 mt-0.5 truncate">{myProtein.product_name}</p>
+            <p className="text-[10px] text-slate-500 mt-0.5 truncate">{myProtein ? mp.product_name : '成分表を読み取って登録'}</p>
           </div>
           <div className="w-full py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-[11px] font-bold text-center shadow-2xs">
             記録・成分表OCR ›
@@ -856,8 +866,10 @@ export default function HomeScreen({
         <div className="bg-gradient-to-r from-indigo-50/70 via-blue-50/70 to-emerald-50/60 rounded-xl p-3.5 border border-indigo-100/90 space-y-2">
           <p className="text-xs font-bold text-slate-800 leading-relaxed">
             {remainingProtein > 0
-              ? `目標タンパク質まであと約 ${remainingProtein}g です。トレーニング後30分以内に「${myProtein.product_name}」を1杯補給すると筋合成効率が最大化します。`
-              : '本日の目標タンパク質（100g）をしっかり達成できています！十分な水分補給と睡眠で超回復を促しましょう。'}
+              ? myProtein
+                ? `タンパク質は、アプリの目安（100g）まであと約 ${remainingProtein}g です。「${mp.product_name}」を1杯飲むと、約${mp.protein_g}g補えます。`
+                : `タンパク質は、アプリの目安（100g）まであと約 ${remainingProtein}g です。よく飲むプロテインを登録すると、ワンタップで記録できます。`
+              : '今日のタンパク質は、アプリの目安（100g）に届いています。'}
           </p>
           <div className="grid grid-cols-2 gap-2 pt-1">
             <div className="bg-white/90 rounded-lg p-2 border border-slate-200/70 flex items-center justify-between">
@@ -900,24 +912,28 @@ export default function HomeScreen({
             <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200/80">
               <div className="min-w-0">
                 <span className="text-xs font-extrabold text-slate-900 block leading-tight">
-                  🛡️ 上部18%自動カット
+                  🛡️ 顔が写らないように撮ってください
                 </span>
                 <span className="text-[10px] text-slate-500 block">
-                  ONのときは写真の上18%を切り取ります。送る前に、顔が写っていないかを端末の中で調べ、写っていれば送りません（見落とすこともあるので、首から下を撮ってください）
+                  顔が写らないように、首から下を正面から撮ってください。送る前に、この端末の中で顔が写っていないかを自動で調べ、顔が見つかった写真は送りません（見落とすこともあるので、撮り方に気をつけてください）。
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={handleToggleQuickFaceCrop}
-                className={`px-3 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer shrink-0 border ${
-                  isFaceCropEnabled
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                    : 'bg-white text-slate-500 border-slate-300'
-                }`}
-              >
-                {isFaceCropEnabled ? 'ON (保護中)' : 'OFF'}
-              </button>
             </div>
+
+            {quickTrim && (
+              <PhotoTrimmer
+                file={quickTrim.file}
+                initialRatio={quickTrim.ratio}
+                onUse={(processed) => {
+                  setRawBodyFile(processed.processedFile);
+                  setCroppedBodyFile(processed.processedFile);
+                  setBodyPreviewUrl(processed.previewUrl);
+                  setQuickBodyError('');
+                  setQuickTrim(null);
+                }}
+                onCancel={() => setQuickTrim(null)}
+              />
+            )}
 
             <input
               ref={quickBodyInputRef}
@@ -934,14 +950,14 @@ export default function HomeScreen({
                 className="w-full py-5 border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-xl bg-indigo-50/30 flex flex-col items-center justify-center gap-1 cursor-pointer"
               >
                 <span className="text-xs font-bold text-indigo-700">📷 体型写真を選択してクイックAI診断</span>
-                <span className="text-[10px] text-slate-500">選択時に上部18%を自動カット</span>
+                <span className="text-[10px] text-slate-500">首から下を正面から撮った写真を選ぶ</span>
               </button>
             ) : (
               <div className="space-y-2">
                 <div className="relative h-32 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 flex items-center justify-center">
                   <img src={bodyPreviewUrl} alt="プレビュー" className="h-full w-auto object-cover" />
                   <span className="absolute top-1.5 left-1.5 bg-indigo-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-md">
-                    {isFaceCropEnabled ? '上部18%トリミング適用済' : '原画像'}
+                    送る前に顔をチェックします
                   </span>
                 </div>
                 <button
@@ -1035,7 +1051,11 @@ export default function HomeScreen({
               </button>
             </div>
 
-            {proteinModalTab === 'quick' ? (
+            {proteinModalTab === 'quick' && !myProtein ? (
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/70 text-center text-[11px] text-slate-600 leading-relaxed">
+                まだプロテインが登録されていません。「成分表ラベル読取」タブで、パッケージの栄養成分表示を読み取るか、数値を入れて登録してください。
+              </div>
+            ) : proteinModalTab === 'quick' ? (
               <div className="space-y-2.5">
                 <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -1044,7 +1064,7 @@ export default function HomeScreen({
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {proteinPresets.slice(0, 4).map((item) => {
-                      const isCurrent = item.product_name === myProtein.product_name;
+                      const isCurrent = item.product_name === mp.product_name;
                       return (
                         <button
                           key={item.id || item.product_name}

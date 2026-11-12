@@ -28,6 +28,7 @@ export default function AiAndBackupSettings({ onRestored }) {
   const [aiStatus, setAiStatus] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
   const [backupStatus, setBackupStatus] = useState(null);
+  const [showKeyGuide, setShowKeyGuide] = useState(false);
   const importInputRef = useRef(null);
 
   const handleSaveKey = async () => {
@@ -119,7 +120,7 @@ export default function AiAndBackupSettings({ onRestored }) {
           </span>
         </div>
         <p className="text-[10px] text-slate-500 leading-relaxed">
-          自分のGemini APIキーを入れると、写真の分析にAIを使えます。AIで分析するとき、写真（体型写真は上の部分を切り取ったもの）はGoogleのGeminiに送られます。キーはこの端末に保存され、書き出しのファイルには入りません。
+          自分のGemini APIキーを入れると、写真の分析にAIを使えます。AIで分析するとき、写真はGoogleのGeminiに送られます（体型写真は、送る前に顔が写っていないか調べます）。無料のキーで送った写真や内容は、Googleの人がサービスの改善のために見ることがあります（Googleの規約による。送られる前に、アカウントとのつながりは外されます）。顔や、人に知られたくないものが写った写真は送らないでください。キーはこの端末に保存され、書き出しのファイルには入りません。
         </p>
         <div className="flex items-center gap-2.5">
           <input
@@ -161,6 +162,37 @@ export default function AiAndBackupSettings({ onRestored }) {
         {aiStatus && (
           <div className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl border leading-relaxed ${statusClass(aiStatus)}`}>
             {aiStatus.text}
+          </div>
+        )}
+        {!hasKey && (
+          <button
+            type="button"
+            onClick={() => setShowKeyGuide((v) => !v)}
+            className="w-full text-left text-[11px] font-bold text-blue-600 cursor-pointer"
+          >
+            {showKeyGuide ? '▼ APIキーの作り方を閉じる' : '▶ APIキーの作り方を見る（無料・数分）'}
+          </button>
+        )}
+        {!hasKey && showKeyGuide && (
+          <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 space-y-2.5">
+            <ol className="list-decimal pl-4 space-y-1.5 text-[11px] text-slate-700 leading-relaxed">
+              <li>下のボタンで Google AI Studio を開き、Googleアカウントでログインする（画面が英語のときは「Create API key」がキーを作るボタンです）</li>
+              <li>「APIキーを作成」（Create API key）を押す。プロジェクトを選ぶ画面が出たら、一番上のものでOK</li>
+              <li>できたキー（AIza で始まる長い文字）の横のコピーを押す</li>
+              <li>このアプリに戻り、上の欄に貼り付けて「確認して保存」を押す</li>
+              <li>「接続を確認し、この端末に保存しました」と出れば完了</li>
+            </ol>
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center py-2 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-xl"
+            >
+              Google AI Studio を開く
+            </a>
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              キーは人に見せたり、SNSやチャットに貼ったりしないでください。無料で使える回数には上限があります。無料のキーで送った写真や内容は、Googleの人がサービスの改善のために見ることがあります（Googleの規約による。送られる前に、アカウントとのつながりは外されます）。顔や、人に知られたくないものが写った写真は送らないでください。AI Studio が使えないときは、研究の担当者に伝えてください。
+            </p>
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { getActiveUserId, setUserStorageData, removeUserStorageData } from './authService';
+import { getActiveUserId, getUserStorageData, setUserStorageData, removeUserStorageData } from './authService';
 
 export const DEFAULT_PROTEIN_PRESETS = [
   {
@@ -43,18 +43,21 @@ export const DEFAULT_PROTEIN_PRESETS = [
   }
 ];
 
-export function getProteinPresets() {
+const isDefaultPreset = (p) => Boolean(p && typeof p.id === 'string' && DEFAULT_PROTEIN_PRESETS.some((d) => d.id === p.id));
+
+function readLegacy(key) {
   try {
-    const raw = localStorage.getItem('raku_protein_presets');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
   } catch {
+    return null;
   }
-  return DEFAULT_PROTEIN_PRESETS;
+}
+
+export function getProteinPresets() {
+  const mine = getUserStorageData('protein_presets', null);
+  const list = Array.isArray(mine) ? mine : getActiveUserId() === 'guest' ? readLegacy('raku_protein_presets') : null;
+  return Array.isArray(list) ? list.filter((p) => p && p.product_name && !isDefaultPreset(p)) : [];
 }
 
 export function saveProteinPreset(newItem) {
@@ -82,23 +85,16 @@ export function saveProteinPreset(newItem) {
     nextList = [cleanItem, ...current];
   }
 
-  localStorage.setItem('raku_protein_presets', JSON.stringify(nextList));
-  localStorage.setItem('raku_my_protein', JSON.stringify(cleanItem));
+  setUserStorageData('protein_presets', nextList);
+  setUserStorageData('my_protein', cleanItem);
   return { preset: cleanItem, list: nextList };
 }
 
 export function getActiveMyProtein() {
-  try {
-    const raw = localStorage.getItem('raku_my_protein');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.product_name) {
-        return parsed;
-      }
-    }
-  } catch {
-  }
-  return DEFAULT_PROTEIN_PRESETS[0];
+  const mine = getUserStorageData('my_protein', null);
+  const item = mine && mine.product_name ? mine : getActiveUserId() === 'guest' ? readLegacy('raku_my_protein') : null;
+  if (item && item.product_name && !isDefaultPreset(item)) return item;
+  return null;
 }
 
 function formatDateOffset(daysAgo) {

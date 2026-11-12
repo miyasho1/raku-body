@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { processPrivacyImage, revokeImagePreviewUrl } from '../utils/geminiAnalyzer';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
+import { inspectBodyPhoto } from '../utils/bodyVision';
+import PhotoTrimmer from './PhotoTrimmer';
 import {
   METRIC_DEFS,
   analyzeBodyPhoto,
@@ -50,7 +52,6 @@ function ClosenessChart({ points }) {
 }
 
 export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
-  const [isCropEnabled, setIsCropEnabled] = useState(true);
   const [idealRaw, setIdealRaw] = useState(null);
   const [idealFile, setIdealFile] = useState(null);
   const [idealPreview, setIdealPreview] = useState(null);
@@ -69,6 +70,7 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
     return Array.isArray(h) ? h : [];
   });
   const [resultTab, setResultTab] = useState('compare');
+  const [trim, setTrim] = useState(null);
 
   const idealInputRef = useRef(null);
   const currentInputRef = useRef(null);
@@ -80,30 +82,21 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
 
   const preparePhoto = async (file, crop) => processPrivacyImage(file, crop);
 
-  const handleToggleCrop = async () => {
-    const next = !isCropEnabled;
-    setIsCropEnabled(next);
-    if (idealRaw) {
-      if (idealPreview) revokeImagePreviewUrl(idealPreview);
-      const p = await preparePhoto(idealRaw, next);
-      setIdealFile(p.processedFile);
-      setIdealPreview(p.previewUrl);
-    }
-    if (currentRaw) {
-      if (currentPreview) revokeImagePreviewUrl(currentPreview);
-      const p = await preparePhoto(currentRaw, next);
-      setCurrentFile(p.processedFile);
-      setCurrentPreview(p.previewUrl);
-    }
-  };
-
   const handleIdealChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (idealPreview) revokeImagePreviewUrl(idealPreview);
     setMessage(null);
     setIdealRaw(file);
-    const p = await preparePhoto(file, isCropEnabled);
+    const p = await preparePhoto(file, false);
+    const check = await inspectBodyPhoto(p.processedFile);
+    if (check.ok && check.faceDetected) {
+      revokeImagePreviewUrl(p.previewUrl);
+      if (idealInputRef.current) idealInputRef.current.value = '';
+      setMessage({ type: 'error', text: BODY_PHOTO_MESSAGES.faceOnSelect });
+      setTrim({ target: 'ideal', file: p.processedFile, ratio: Math.min(0.8, (check.faceBottom || 0.2) + 0.08) });
+      return;
+    }
     setIdealFile(p.processedFile);
     setIdealPreview(p.previewUrl);
   };
@@ -114,7 +107,15 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
     if (currentPreview) revokeImagePreviewUrl(currentPreview);
     setMessage(null);
     setCurrentRaw(file);
-    const p = await preparePhoto(file, isCropEnabled);
+    const p = await preparePhoto(file, false);
+    const check = await inspectBodyPhoto(p.processedFile);
+    if (check.ok && check.faceDetected) {
+      revokeImagePreviewUrl(p.previewUrl);
+      if (currentInputRef.current) currentInputRef.current.value = '';
+      setMessage({ type: 'error', text: BODY_PHOTO_MESSAGES.faceOnSelect });
+      setTrim({ target: 'current', file: p.processedFile, ratio: Math.min(0.8, (check.faceBottom || 0.2) + 0.08) });
+      return;
+    }
     setCurrentFile(p.processedFile);
     setCurrentPreview(p.previewUrl);
   };
@@ -231,8 +232,32 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
     </div>
   );
 
+  const handleTrimUse = (processed) => {
+    if (trim.target === 'ideal') {
+      if (idealPreview) revokeImagePreviewUrl(idealPreview);
+      setIdealRaw(processed.processedFile);
+      setIdealFile(processed.processedFile);
+      setIdealPreview(processed.previewUrl);
+    } else {
+      if (currentPreview) revokeImagePreviewUrl(currentPreview);
+      setCurrentRaw(processed.processedFile);
+      setCurrentFile(processed.processedFile);
+      setCurrentPreview(processed.previewUrl);
+    }
+    setTrim(null);
+    setMessage({ type: 'success', text: '顔が見つからない位置で切り取りました。この写真で分析できます。' });
+  };
+
   return (
     <div className="flex flex-col space-y-3.5 pb-3">
+      {trim && (
+        <PhotoTrimmer
+          file={trim.file}
+          initialRatio={trim.ratio}
+          onUse={handleTrimUse}
+          onCancel={() => setTrim(null)}
+        />
+      )}
       <div className="flex items-center justify-between gap-2.5 px-0.5">
         <button
           onClick={onBack}
@@ -257,22 +282,10 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
 
       <section className="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm space-y-3">
         <div className="bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80 space-y-1">
-          <span className="text-xs font-extrabold text-slate-900 block leading-tight">🛡️ 送る前に、顔が写っていないか調べます</span>
+          <span className="text-xs font-extrabold text-slate-900 block leading-tight">🛡️ 顔が写らないように撮ってください</span>
           <span className="text-[10px] text-slate-500 block leading-relaxed">
-            写真を送る前に、この端末の中で顔が写っていないかを自動で調べます。顔が見つかったときは送りません。ただし見落とすこともあるので、首から下を撮ってください。分析するときは、写真がGoogleのGeminiに送られます。理想の写真は、自分で撮った写真か、使ってよい写真を選んでください。
+            顔が写らないように、首から下を正面から撮ってください。送る前に、この端末の中で顔が写っていないかを自動で調べ、顔が見つかった写真は送りません（見落とすこともあるので、撮り方に気をつけてください）。分析するときは、写真がGoogleのGeminiに送られます。理想の写真は、自分で撮った写真か、使ってよい写真を選んでください。
           </span>
-          <div className="flex items-center justify-between gap-2.5 pt-1">
-            <span className="text-[10px] text-slate-600 font-bold">写真の上18%を切り取る</span>
-            <button
-              type="button"
-              onClick={handleToggleCrop}
-              className={`px-3 py-1 rounded-xl text-[11px] font-extrabold cursor-pointer shrink-0 border ${
-                isCropEnabled ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-300'
-              }`}
-            >
-              {isCropEnabled ? 'ON' : 'OFF'}
-            </button>
-          </div>
         </div>
 
         <input ref={idealInputRef} type="file" accept="image/*" onChange={handleIdealChange} className="hidden" id="ideal-file-input" />
@@ -423,6 +436,22 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
                   </div>
                 )}
               </div>
+              {(Array.isArray(latest.strengths) && latest.strengths.length > 0) || (Array.isArray(latest.improvements) && latest.improvements.length > 0) ? (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="bg-emerald-50/70 rounded-xl p-3.5 border border-emerald-200/70 space-y-1.5">
+                    <span className="text-[11px] font-bold text-emerald-900 block">👍 良いところ</span>
+                    {(latest.strengths || []).map((s, i) => (
+                      <p key={i} className="text-[11px] text-slate-700 leading-relaxed">・{s}</p>
+                    ))}
+                  </div>
+                  <div className="bg-amber-50/70 rounded-xl p-3.5 border border-amber-200/70 space-y-1.5">
+                    <span className="text-[11px] font-bold text-amber-900 block">📌 伸ばすところ</span>
+                    {(latest.improvements || []).map((s, i) => (
+                      <p key={i} className="text-[11px] text-slate-700 leading-relaxed">・{s}</p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {latest.advice && (
                 <div className="bg-blue-50/60 rounded-xl p-3.5 border border-blue-200/60 space-y-1">
                   <span className="text-blue-900 font-bold text-[11px] block">💡 アドバイス</span>
