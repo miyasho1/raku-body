@@ -7,7 +7,8 @@ import {
   initializeGoogleIdentityServices,
   setAuthUserSession
 } from '../utils/authService';
-import { isServerConfigured, pullServerRecords, pushAllLocalRecords, syncGlobalSettingsFromUser, SYNC_KINDS } from '../utils/serverSync';
+import { isServerConfigured } from '../utils/serverSync';
+import { finishServerLogin } from '../utils/accountLink';
 import AccountAuth from './AccountAuth';
 
 const LAB_PASSCODE = '2026';
@@ -124,57 +125,11 @@ export default function LoginScreen({ onLoginSuccess }) {
   const serverMode = isServerConfigured();
 
   const handleServerAuthenticated = async (user) => {
-    setAuthUserSession(user);
-    const pulled = await pullServerRecords(user.uid);
-    if (pulled === 0) {
-      const SAMPLE_PROTEIN_IDS = ['preset_gold_whey', 'preset_savas_whey', 'preset_myprotein_wpi', 'preset_savas_soy'];
-      const DEMO_LIST_KINDS = ['meals', 'workouts', 'metrics', 'logs'];
-      const readGuest = (k) => {
-        const raw = localStorage.getItem(`raku_user_guest_${k}`);
-        if (raw === null) return raw;
-        if (k === 'my_protein' || k === 'protein_presets') {
-          try {
-            const v = JSON.parse(raw);
-            const isSample = (p) => Boolean(p && typeof p.id === 'string' && SAMPLE_PROTEIN_IDS.includes(p.id));
-            if (Array.isArray(v)) {
-              const real = v.filter((p) => !isSample(p));
-              return real.length > 0 ? JSON.stringify(real) : null;
-            }
-            return isSample(v) ? null : raw;
-          } catch {
-            return null;
-          }
-        }
-        if (!DEMO_LIST_KINDS.includes(k)) return raw;
-        try {
-          const list = JSON.parse(raw);
-          if (!Array.isArray(list)) return raw;
-          const real = list.filter((item) => !(item && typeof item.id === 'string' && item.id.startsWith('demo_')));
-          return real.length > 0 ? JSON.stringify(real) : null;
-        } catch {
-          return null;
-        }
-      };
-      const guestKinds = SYNC_KINDS.filter((k) => {
-        if (k === 'streak') return false;
-        try {
-          return readGuest(k) !== null && localStorage.getItem(`raku_user_${user.uid}_${k}`) === null;
-        } catch {
-          return false;
-        }
-      });
-      const hasGuestRecords = guestKinds.some((k) => ['meals', 'workouts', 'metrics'].includes(k));
-      if (hasGuestRecords && window.confirm('この端末に「お試し」で付けた記録があります。このアカウントに引き継ぎますか？（引き継ぐと、記録はサーバーに保存されます。サンプルデータは引き継ぎません）')) {
-        guestKinds.forEach((k) => {
-          try {
-            localStorage.setItem(`raku_user_${user.uid}_${k}`, readGuest(k));
-          } catch {
-          }
-        });
-      }
-      await pushAllLocalRecords(user.uid, user.id);
+    const r = await finishServerLogin(user, { carryOver: 'ask' });
+    if (!r.ok) {
+      window.alert(r.error);
+      return;
     }
-    syncGlobalSettingsFromUser(user.uid);
     onLoginSuccess(user);
   };
 

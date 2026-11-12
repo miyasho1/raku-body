@@ -232,12 +232,12 @@ export function syncGlobalSettingsFromUser(appUid) {
 
 export async function pullServerRecords(appUid) {
   const sb = getServerClient();
-  if (!sb) return 0;
+  if (!sb) return null;
   await flushPending();
   const { data: sess } = await sb.auth.getSession();
-  if (!sess || !sess.session) return 0;
+  if (!sess || !sess.session) return null;
   const { data, error } = await sb.from('user_records').select('kind, data').eq('user_id', sess.session.user.id);
-  if (error || !Array.isArray(data)) return 0;
+  if (error || !Array.isArray(data)) return null;
   data.forEach((row) => {
     if (!SYNC_KINDS.includes(row.kind)) return;
     try {

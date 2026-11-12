@@ -14,6 +14,9 @@ import ProfileSetup from './components/ProfileSetup';
 import AiAndBackupSettings from './components/AiAndBackupSettings';
 import AdminScreen from './components/AdminScreen';
 import HealthLinkSettings from './components/HealthLinkSettings';
+import AccountAuth from './components/AccountAuth';
+import { finishServerLogin } from './utils/accountLink';
+import { isServerConfigured } from './utils/serverSync';
 import { pullHealthImports } from './utils/healthSync';
 import { GOAL_OPTIONS, getSavedGoal, saveGoal, goalLabel } from './utils/goals';
 import { refreshServerUser, signOutServer, flushPending } from './utils/serverSync';
@@ -840,6 +843,29 @@ export default function App() {
                     <span className="text-[10px] text-blue-700 block mt-0.5">記録の始め方を5ステップで紹介します</span>
                   </div>
                 </button>
+
+                {(authUser?.isGuest || authUser?.authProvider === 'guest') && isServerConfigured() && (
+                  <div className="bg-blue-50 p-3.5 rounded-2xl border border-blue-200/80 space-y-2.5">
+                    <div className="text-xs font-extrabold text-blue-900">アカウントを作って記録を残す</div>
+                    <p className="text-[10px] text-blue-800 leading-relaxed">
+                      いまは「お試し」で、記録はこの端末だけに保存されています。アカウントを作ると、ここまでの記録を引き継いで、サーバーに保存します（サンプルデータは引き継がず、お試しの記録とともにこの端末から消えます）。すでにアカウントがある人は「ログイン」から入ってください（そのアカウントにサーバーの記録がないときだけ、引き継ぎます）。
+                    </p>
+                    <AccountAuth
+                      onAuthenticated={async (user) => {
+                        const r = await finishServerLogin(user, { carryOver: 'always' });
+                        if (!r.ok) {
+                          setAuthUserSession(authUser);
+                          showToast(r.error);
+                          return;
+                        }
+                        setIsDrawerOpen(false);
+                        handleLoginSuccess(user);
+                        if (r.carried) showToast('お試しの記録を、アカウントに引き継ぎました');
+                        else if (r.pulled > 0) showToast('このアカウントにはすでに記録があるため、お試しの記録は引き継ぎませんでした（お試しの記録はこの端末に残っています）');
+                      }}
+                    />
+                  </div>
+                )}
 
                 {authUser?.authProvider === 'server' && (
                   <HealthLinkSettings
