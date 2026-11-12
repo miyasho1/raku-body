@@ -16,6 +16,12 @@ create table if not exists public.user_records (
   primary key (user_id, kind)
 );
 
+grant usage on schema public to authenticated;
+grant select on public.profiles to authenticated;
+grant select, insert, update, delete on public.user_records to authenticated;
+revoke all on public.profiles from anon;
+revoke all on public.user_records from anon;
+
 alter table public.profiles enable row level security;
 alter table public.user_records enable row level security;
 
