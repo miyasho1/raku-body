@@ -1,4 +1,4 @@
-const CACHE_NAME = 'raku-body-pwa-v2';
+const CACHE_NAME = 'raku-body-pwa-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -30,7 +30,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname === '/'
   ) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request.url, { cache: 'no-store', credentials: 'same-origin' })
         .then((response) => {
           if (response && response.status === 200) {
             const clone = response.clone();
