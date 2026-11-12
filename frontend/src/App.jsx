@@ -56,6 +56,7 @@ export default function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isMobileGuideOpen, setIsMobileGuideOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isProfileEdit, setIsProfileEdit] = useState(false);
   const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('profile_done', false));
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('onboarding_done', false));
   const [lanIp, setLanIp] = useState('192.168.1.10');
@@ -766,7 +767,7 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80">
-                    <label className="text-[11px] font-bold text-slate-700 shrink-0">目標カロリー</label>
+                    <label className="text-[11px] font-bold text-slate-700 shrink-0">1日に食べる量の目標</label>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="number"
@@ -805,6 +806,22 @@ export default function App() {
                     </div>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    setIsProfileEdit(true);
+                    setIsProfileSetupOpen(true);
+                  }}
+                  className="w-full bg-indigo-50 hover:bg-indigo-100 p-3.5 rounded-2xl border border-indigo-200/80 flex items-center gap-2.5 text-left cursor-pointer transition-colors"
+                >
+                  <span className="text-sm">🎯</span>
+                  <div className="min-w-0">
+                    <span className="text-xs font-extrabold text-indigo-900 block leading-tight">目標を相談し直す</span>
+                    <span className="text-[10px] text-indigo-700 block mt-0.5">どうなりたいかを答えると、目標体重と食べる量の目安を出します</span>
+                  </div>
+                </button>
 
                 <button
                   type="button"
@@ -932,8 +949,15 @@ export default function App() {
 
         {authUser && isProfileSetupOpen && (
           <ProfileSetup
-            onDone={handleProfileSetupDone}
-            onLater={() => setIsProfileSetupOpen(false)}
+            isEdit={isProfileEdit}
+            onDone={(v) => {
+              setIsProfileEdit(false);
+              handleProfileSetupDone(v);
+            }}
+            onLater={() => {
+              setIsProfileEdit(false);
+              setIsProfileSetupOpen(false);
+            }}
           />
         )}
 

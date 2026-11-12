@@ -17,6 +17,7 @@ export const SYNC_KINDS = [
   'body_analysis',
   'body_analysis_history',
   'body_ideal',
+  'profile_basic',
   'profile_done',
   'onboarding_done'
 ];
