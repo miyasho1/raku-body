@@ -110,7 +110,7 @@ export async function fileToBase64(file) {
 }
 
 const GEMINI_KEY_STORAGE = 'raku_gemini_api_key';
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export function getStoredGeminiKey() {
@@ -141,7 +141,66 @@ function parseGeminiJsonText(rawText) {
   return JSON.parse(cleaned);
 }
 
+const EXCLUDED_MODEL_WORDS = ['image', 'tts', 'audio', 'live', 'embedding', 'robotics', 'computer-use', 'native'];
+let discoveredModels = null;
+let discoveredForKey = '';
+let lastGeminiError = null;
+
+function errorPriority(e) {
+  if (!e) return -1;
+  if (e.status === 400 && /api key/i.test(e.message || '')) return 6;
+  if (e.status === 401 || e.status === 403) return 5;
+  if (e.status === 429) return 4;
+  if (e.status >= 500) return 3;
+  if (e.status === 400) return 2;
+  if (e.status === 0 || e.status === 200) return 1;
+  return 0;
+}
+
+function recordGeminiError(e) {
+  if (errorPriority(e) >= errorPriority(lastGeminiError)) lastGeminiError = e;
+}
+
+function versionOf(name) {
+  const m = name.match(/gemini-(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : 0;
+}
+
+function rankModel(name) {
+  let score = versionOf(name) * 100;
+  if (name.includes('flash')) score += 50;
+  if (name.includes('lite')) score -= 20;
+  if (name.includes('preview') || name.includes('exp')) score -= 10;
+  if (name.includes('latest')) score -= 5;
+  return score;
+}
+
+async function discoverModels(apiKey) {
+  if (discoveredModels && discoveredForKey === apiKey) return discoveredModels;
+  const res = await fetch(`${GEMINI_ENDPOINT}?pageSize=200`, { headers: { 'x-goog-api-key': apiKey } });
+  if (!res.ok) {
+    let message = '';
+    try {
+      const j = await res.json();
+      message = j?.error?.message || '';
+    } catch {
+    }
+    lastGeminiError = { status: res.status, message };
+    return [];
+  }
+  const json = await res.json();
+  const names = (json.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter((n) => n.startsWith('gemini-') && n.includes('flash') && !EXCLUDED_MODEL_WORDS.some((w) => n.includes(w)))
+    .sort((a, b) => rankModel(b) - rankModel(a));
+  discoveredModels = names;
+  discoveredForKey = apiKey;
+  return names;
+}
+
 async function callGeminiDirect(prompt, base64Data, mimeType, apiKey) {
+  lastGeminiError = null;
   const parts = [{ text: prompt }];
   if (base64Data) {
     parts.push({ inlineData: { mimeType: mimeType || 'image/jpeg', data: base64Data } });
@@ -150,7 +209,15 @@ async function callGeminiDirect(prompt, base64Data, mimeType, apiKey) {
     contents: [{ parts }],
     generationConfig: { responseMimeType: 'application/json' }
   });
-  for (const model of GEMINI_MODELS) {
+  let models = [];
+  try {
+    models = await discoverModels(apiKey);
+  } catch {
+    lastGeminiError = { status: 0, message: '' };
+  }
+  if (lastGeminiError && lastGeminiError.status === 400 && /api key/i.test(lastGeminiError.message || '')) return null;
+  const candidates = [...new Set([...models.slice(0, 4), ...GEMINI_MODELS])];
+  for (const model of candidates) {
     try {
       const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
         method: 'POST',
@@ -160,14 +227,50 @@ async function callGeminiDirect(prompt, base64Data, mimeType, apiKey) {
         },
         body
       });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        let message = '';
+        try {
+          const j = await res.json();
+          message = j?.error?.message || '';
+        } catch {
+        }
+        recordGeminiError({ status: res.status, message, model });
+        if (res.status === 400 && /api key/i.test(message)) return null;
+        continue;
+      }
       const json = await res.json();
-      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) return parseGeminiJsonText(text);
+      const text = json?.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text;
+      if (text) {
+        if (discoveredModels && discoveredModels[0] !== model) {
+          discoveredModels = [model, ...discoveredModels.filter((m) => m !== model)];
+        }
+        try {
+          return parseGeminiJsonText(text);
+        } catch {
+          recordGeminiError({ status: 200, message: 'parse', model });
+          continue;
+        }
+      }
+      recordGeminiError({ status: 200, message: 'empty', model });
     } catch {
+      recordGeminiError({ status: 0, message: '', model });
     }
   }
   return null;
+}
+
+function describeGeminiError(err) {
+  if (!err) return '原因が分かりませんでした。';
+  if (err.status === 0) return '通信できませんでした。電波やWi-Fi、ブラウザの拡張機能を確認してください。';
+  if (err.status === 400 && /api key/i.test(err.message || '')) return 'キーが正しくありません。コピーし直して貼り付けてください（前後の空白や途中の切れに注意）。';
+  if (err.status === 400) return `リクエストが受け付けられませんでした（${err.message || '400'}）。`;
+  if (err.status === 401 || err.status === 403) return 'このキーではGeminiを使えません。キーに使い道の制限（使えるサイトやAPIの制限）がかかっていないか、Gemini APIが有効になっているかを確認してください。';
+  if (err.status === 404) return '使えるAIのモデルが見つかりませんでした。';
+  if (err.status === 429) return '利用回数の上限（1分あたりの上限などを含む）に達しました。少し時間をおいてから試してください。';
+  if (err.status >= 500) return 'Google側でエラーが起きました（混雑など）。少し時間をおいてから試してください。';
+  if (err.status === 200 && err.message === 'parse') return 'AIの返事を読み取れませんでした。もう一度試してください。';
+  if (err.status === 200) return 'AIから返事はありましたが、中身が空でした。もう一度試してください。';
+  return `接続に失敗しました（コード ${err.status}）。`;
 }
 
 async function callGeminiViaServer(prompt, base64Data, mimeType) {
@@ -197,9 +300,20 @@ async function executeGeminiCall(prompt, base64Data, mimeType) {
 
 export async function testGeminiConnection(apiKey) {
   const key = (apiKey || '').trim();
-  if (!key) return false;
-  const result = await callGeminiDirect('次のJSONだけをそのまま返してください。{"ok": true}', null, null, key);
-  return Boolean(result && result.ok === true);
+  if (!key) return { ok: false, reason: 'キーが空です。' };
+  let result = null;
+  try {
+    result = await callGeminiDirect('次のJSONだけをそのまま返してください。{"ok": true}', null, null, key);
+  } catch {
+    result = null;
+  }
+  if (result && result.ok === true) return { ok: true, reason: '' };
+  if (result) return { ok: false, reason: 'AIから想定外の返事がありました。もう一度試してください。' };
+  return { ok: false, reason: describeGeminiError(lastGeminiError) };
+}
+
+export function getLastGeminiErrorText() {
+  return lastGeminiError ? describeGeminiError(lastGeminiError) : '';
 }
 
 const toNumberOrNull = (v) => {

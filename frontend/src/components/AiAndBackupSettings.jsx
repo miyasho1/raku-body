@@ -33,7 +33,7 @@ export default function AiAndBackupSettings({ onRestored }) {
     if (!key) return;
     setIsTesting(true);
     setAiStatus(null);
-    const ok = await testGeminiConnection(key);
+    const { ok, reason } = await testGeminiConnection(key);
     setIsTesting(false);
     if (ok) {
       setStoredGeminiKey(key);
@@ -41,18 +41,18 @@ export default function AiAndBackupSettings({ onRestored }) {
       setKeyInput('');
       setAiStatus({ type: 'success', text: '接続を確認し、この端末に保存しました。' });
     } else {
-      setAiStatus({ type: 'error', text: '接続できませんでした。キーが正しいか、通信できるかを確認してください（保存していません）。' });
+      setAiStatus({ type: 'error', text: `接続できませんでした（保存していません）。${reason}` });
     }
   };
 
   const handleTestSaved = async () => {
     setIsTesting(true);
     setAiStatus(null);
-    const ok = await testGeminiConnection(getStoredGeminiKey());
+    const { ok, reason } = await testGeminiConnection(getStoredGeminiKey());
     setIsTesting(false);
     setAiStatus(ok
       ? { type: 'success', text: '保存済みのキーでAIに接続できました。' }
-      : { type: 'error', text: '保存済みのキーで接続できませんでした。' });
+      : { type: 'error', text: `保存済みのキーで接続できませんでした。${reason}` });
   };
 
   const handleRemoveKey = () => {
