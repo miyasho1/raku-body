@@ -119,7 +119,9 @@ export function clearGuestSessionData() {
     'my_protein',
     'selected_goal',
     'body_analysis',
-    'body_analysis_history'
+    'body_analysis_history',
+    'profile_done',
+    'onboarding_done'
   ];
   dataTypes.forEach((t) => {
     try {

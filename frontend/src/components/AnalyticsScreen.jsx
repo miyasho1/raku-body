@@ -107,12 +107,14 @@ export default function AnalyticsScreen({ dataVersion }) {
 
   const heightCm = parseFloat(localStorage.getItem('raku_body_height') || localStorage.getItem('raku_user_height') || '170');
   const heightM = heightCm / 100;
-  const targetWeightGoal = parseFloat(localStorage.getItem('raku_target_weight') || '62.0') || 62.0;
+  const savedTargetWeight = parseFloat(getUserStorageData('target_weight', null));
+  const hasGoal = Number.isFinite(savedTargetWeight) && savedTargetWeight > 0;
+  const targetWeightGoal = hasGoal ? savedTargetWeight : 0;
 
-  let latestWeight = 64.4;
-  let latestFat = 18.2;
+  let latestWeight = 0;
+  let latestFat = null;
   let weightDiff = 0;
-  let currentBmi = (64.4 / (heightM * heightM)).toFixed(1);
+  let currentBmi = null;
 
   const sortedMetrics = [...metrics].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
@@ -142,18 +144,18 @@ export default function AnalyticsScreen({ dataVersion }) {
   const avgCarbs = filteredMeals.reduce((acc, cur) => acc + (cur.carbs_g || 0), 0) / effectiveDays;
   const avgFiber = filteredMeals.reduce((acc, cur) => acc + (cur.fiber_g || 0), 0) / effectiveDays;
 
-  const energyRate = Math.min(100, Math.round((avgCalories / targetDailyCal) * 100)) || 82;
-  const proteinRate = Math.min(100, Math.round((avgProtein / targetDailyProtein) * 100)) || 92;
-  const fatRate = Math.min(100, Math.round((avgFat / targetDailyFat) * 100)) || 74;
-  const carbsRate = Math.min(100, Math.round((avgCarbs / targetDailyCarbs) * 100)) || 76;
-  const fiberRate = Math.min(100, Math.round((avgFiber / targetDailyFiber) * 100)) || 86;
+  const energyRate = Math.min(100, Math.round((avgCalories / targetDailyCal) * 100)) || 0;
+  const proteinRate = Math.min(100, Math.round((avgProtein / targetDailyProtein) * 100)) || 0;
+  const fatRate = Math.min(100, Math.round((avgFat / targetDailyFat) * 100)) || 0;
+  const carbsRate = Math.min(100, Math.round((avgCarbs / targetDailyCarbs) * 100)) || 0;
+  const fiberRate = Math.min(100, Math.round((avgFiber / targetDailyFiber) * 100)) || 0;
 
   const radarItems = [
-    { label: 'エネルギー', rate: energyRate, value: `${avgCalories || 1680}kcal` },
-    { label: 'タンパク質', rate: proteinRate, value: `${Math.round(avgProtein) || 96}g` },
-    { label: '脂質', rate: fatRate, value: `${Math.round(avgFat) || 40}g` },
-    { label: '炭水化物', rate: carbsRate, value: `${Math.round(avgCarbs) || 190}g` },
-    { label: '食物繊維', rate: fiberRate, value: `${Math.round(avgFiber) || 17}g` }
+    { label: 'エネルギー', rate: energyRate, value: `${avgCalories || 0}kcal` },
+    { label: 'タンパク質', rate: proteinRate, value: `${Math.round(avgProtein) || 0}g` },
+    { label: '脂質', rate: fatRate, value: `${Math.round(avgFat) || 0}g` },
+    { label: '炭水化物', rate: carbsRate, value: `${Math.round(avgCarbs) || 0}g` },
+    { label: '食物繊維', rate: fiberRate, value: `${Math.round(avgFiber) || 0}g` }
   ];
 
   const radarCx = 125;
@@ -199,9 +201,9 @@ export default function AnalyticsScreen({ dataVersion }) {
 
   const displayDays = period === 'week' ? targetDates : targetDates.slice(-14);
 
-  const pCal = (avgProtein || 88) * 4;
-  const fCal = (avgFat || 42) * 9;
-  const cCal = (avgCarbs || 195) * 4;
+  const pCal = (avgProtein || 0) * 4;
+  const fCal = (avgFat || 0) * 9;
+  const cCal = (avgCarbs || 0) * 4;
   const totalPfcCal = pCal + fCal + cCal || 1;
   const pPct = Math.round((pCal / totalPfcCal) * 100);
   const fPct = Math.round((fCal / totalPfcCal) * 100);
@@ -250,42 +252,54 @@ export default function AnalyticsScreen({ dataVersion }) {
   const mostPart = sortedParts[sortedParts.length - 1];
 
   let workoutInsight = '各部位バランスよくトレーニングができています！';
-  if (totalWorkoutCount > 0 && leastPart && leastPart.pct < 10) {
-    workoutInsight = `今週は「${leastPart.name}」の刺激が少なめです。次回メニューに優先して組み込みましょう。`;
+  if (totalWorkoutCount === 0) {
+    workoutInsight = 'この期間の運動の記録はまだありません。';
+  } else if (leastPart && leastPart.pct < 10) {
+    workoutInsight = `この期間は「${leastPart.name}」の記録が少なめです。次のメニューに入れてみましょう。`;
   } else if (mostPart && mostPart.pct > 40) {
-    workoutInsight = `「${mostPart.name}」が中心です。拮抗筋や下半身も合わせて鍛えると代謝が上がります。`;
+    workoutInsight = `「${mostPart.name}」が中心です。ほかの部位も合わせて鍛えてみましょう。`;
   }
 
   const avgDailyWorkoutBurn = filteredWorkouts.length > 0
     ? Math.round(
         filteredWorkouts.reduce((acc, w) => acc + (w.sets || 3) * 18 + (w.duration_minutes || 15) * 4, 0) / 7
       )
-    : 145;
+    : 0;
   const estimatedDailyExpenditure = Math.round(latestWeight * 29 + avgDailyWorkoutBurn);
-  const effectiveAvgIntake = avgCalories || 1680;
+  const effectiveAvgIntake = avgCalories || 0;
   const dailyCalorieBalance = effectiveAvgIntake - estimatedDailyExpenditure;
 
-  let dailyWeightSlope = dailyCalorieBalance / 7200;
-  if (sortedMetrics.length >= 2) {
+  const hasMeals = filteredMeals.length > 0;
+  const hasWeight = sortedMetrics.length > 0;
+  const canPredict = sortedMetrics.length >= 2;
+  const canReport = hasMeals && canPredict;
+
+  let dailyWeightSlope = 0;
+  if (canPredict) {
     const recentSlice = sortedMetrics.slice(-7);
-    const span = Math.max(1, recentSlice.length - 1);
-    const observedSlope = (recentSlice[recentSlice.length - 1].weight - recentSlice[0].weight) / span;
-    dailyWeightSlope = observedSlope * 0.45 + (dailyCalorieBalance / 7200) * 0.55;
+    const firstT = new Date(recentSlice[0].date).getTime();
+    const lastT = new Date(recentSlice[recentSlice.length - 1].date).getTime();
+    const spanDays = Math.max(1, Math.round((lastT - firstT) / 86400000) || recentSlice.length - 1);
+    const observedSlope = (recentSlice[recentSlice.length - 1].weight - recentSlice[0].weight) / spanDays;
+    dailyWeightSlope = hasMeals ? observedSlope * 0.45 + (dailyCalorieBalance / 7200) * 0.55 : observedSlope;
   }
-  dailyWeightSlope = Math.max(-0.12, Math.min(-0.025, dailyWeightSlope));
+  dailyWeightSlope = Math.max(-0.1, Math.min(0.1, dailyWeightSlope));
 
   const predWeight14d = Number(Math.max(42, latestWeight + dailyWeightSlope * 14).toFixed(1));
   const predWeight30d = Number(Math.max(42, latestWeight + dailyWeightSlope * 30).toFixed(1));
   const predWeight90d = Number(Math.max(42, latestWeight + dailyWeightSlope * 90).toFixed(1));
 
-  const dailyFatSlope = dailyWeightSlope * 0.85;
-  const predFat30d = Number(Math.max(6, latestFat + dailyFatSlope * 30).toFixed(1));
-  const predFat90d = Number(Math.max(6, latestFat + dailyFatSlope * 90).toFixed(1));
 
-  const remainingToGoalKg = Math.max(0, latestWeight - targetWeightGoal);
-  const daysToGoal = remainingToGoalKg <= 0.1
+  const gapToGoalKg = latestWeight - targetWeightGoal;
+  const movingTowardGoal = (gapToGoalKg > 0 && dailyWeightSlope < -0.005) || (gapToGoalKg < 0 && dailyWeightSlope > 0.005);
+  const daysToGoal = !hasGoal
+    ? null
+    : Math.abs(gapToGoalKg) <= 0.1
     ? 0
-    : Math.min(365, Math.max(1, Math.round(remainingToGoalKg / Math.abs(dailyWeightSlope))));
+    : movingTowardGoal
+      ? Math.min(365, Math.max(1, Math.round(Math.abs(gapToGoalKg) / Math.abs(dailyWeightSlope))))
+      : null;
+  const goalLabel = !hasGoal ? '未設定' : daysToGoal === 0 ? '達成済' : daysToGoal === null ? '未定' : daysToGoal >= 365 ? '1年以上' : null;
   const goalDateObj = new Date();
   goalDateObj.setDate(goalDateObj.getDate() + daysToGoal);
   const goalDateStr = `${goalDateObj.getMonth() + 1}月${goalDateObj.getDate()}日頃`;
@@ -336,7 +350,7 @@ export default function AnalyticsScreen({ dataVersion }) {
   );
   const workoutContinuityScore = totalWorkoutCount > 0
     ? Math.min(100, Math.round((Math.min(totalWorkoutCount, 5) / 5) * 100))
-    : 75;
+    : 0;
   const calorieControlScore = effectiveAvgIntake <= targetDailyCal + 150 ? 94 : 76;
   const weeklyTotalScore = Math.round(
     pfcBalanceScore * 0.4 + workoutContinuityScore * 0.35 + calorieControlScore * 0.25
@@ -346,7 +360,7 @@ export default function AnalyticsScreen({ dataVersion }) {
     if (score >= 90) {
       return {
         rank: 'S',
-        label: 'Sランク（最優秀ペース）',
+        label: 'Sランク（とても順調）',
         grad: 'from-indigo-600 via-blue-600 to-emerald-500',
         pill: 'bg-indigo-50 text-indigo-700 border-indigo-200'
       };
@@ -354,7 +368,7 @@ export default function AnalyticsScreen({ dataVersion }) {
     if (score >= 80) {
       return {
         rank: 'A',
-        label: 'Aランク（順調達成圏）',
+        label: 'Aランク（順調）',
         grad: 'from-blue-600 to-teal-500',
         pill: 'bg-blue-50 text-blue-700 border-blue-200'
       };
@@ -362,14 +376,14 @@ export default function AnalyticsScreen({ dataVersion }) {
     if (score >= 70) {
       return {
         rank: 'B',
-        label: 'Bランク（安定継続中）',
+        label: 'Bランク（継続中）',
         grad: 'from-emerald-600 to-cyan-600',
         pill: 'bg-emerald-50 text-emerald-700 border-emerald-200'
       };
     }
     return {
       rank: 'C',
-      label: 'Cランク（改善余地あり）',
+      label: 'Cランク（伸びしろあり）',
       grad: 'from-amber-500 to-orange-500',
       pill: 'bg-amber-50 text-amber-700 border-amber-200'
     };
@@ -379,27 +393,26 @@ export default function AnalyticsScreen({ dataVersion }) {
 
   const weeklyActionItems = [
     avgProtein >= 95
-      ? `タンパク質摂取（平均${Math.round(avgProtein)}g/日）は理想的です。トレ後30分以内のホエイ補給を継続しましょう。`
-      : `タンパク質があと約${Math.max(10, Math.round(100 - avgProtein))}g/日増えると除脂肪体重の維持・向上に直結します。`,
-    leastPart && leastPart.sets < 4
-      ? `部位別では「${leastPart.name}」の刺激がやや少なめです。来週は${leastPart.name}種目を1種目追加すると全身代謝が底上げされます。`
+      ? `タンパク質摂取（平均${Math.round(avgProtein)}g/日）は、アプリの目安（100g/日）に届いています。この調子で続けましょう。`
+      : `タンパク質があと約${Math.max(10, Math.round(100 - avgProtein))}g/日増えると、アプリの目安（100g/日）に届きます。`,
+    totalWorkoutCount === 0
+      ? 'この期間の運動の記録はまだありません。運動を記録すると、部位ごとのバランスが分かります。'
+      : leastPart && leastPart.sets < 4
+      ? `部位別では「${leastPart.name}」の刺激がやや少なめです。来週は${leastPart.name}種目を1つ足してみましょう。`
       : '胸・背中・脚の大筋群をバランス良く刺激できています。最終セットの重量を+2.5kg更新してみましょう。',
-    `現在のカロリー収支（${dailyCalorieBalance}kcal/日）を維持すると、1ヶ月後に${predWeight30d}kg、約${daysToGoal}日後に目標${targetWeightGoal.toFixed(1)}kgへ到達見込みです。`
+    !hasGoal
+      ? `今の体重の動きが続くと、1ヶ月後の目安は${predWeight30d}kgです。目標体重は、メニューの「基本プロフィール・目標設定」で入れられます。`
+      : daysToGoal === null
+      ? `今の体重の動きのままでは、目標${targetWeightGoal.toFixed(1)}kgに近づいていません（1ヶ月後の目安 ${predWeight30d}kg）。`
+      : `今の体重の動きが続くと、1ヶ月後の目安は${predWeight30d}kgです${daysToGoal > 0 ? `（目標${targetWeightGoal.toFixed(1)}kgまで約${daysToGoal}日）` : ''}。`
   ];
-
-  const fallbackAdvice = advice || {
-    title: '高タンパク習慣と大筋群刺激の好循環',
-    tag: 'AI総合評価: A+',
-    praise: `直近1週間の平均タンパク質摂取は約${Math.round(avgProtein) || 96}gと高水準を維持できており、トレーニングによる筋合成と代謝アップが順調に進んでいます。`,
-    next_action: '夕食時の脂質を適正範囲に保ちつつ、脚・背中の大筋群種目を週2〜3回ペースで継続しましょう。'
-  };
 
   return (
     <div className="flex flex-col space-y-3.5 pb-3">
       <header className="flex items-center justify-between gap-2 px-0.5">
         <div>
           <h1 className="text-base font-extrabold text-slate-900 leading-tight">総合分析ダッシュボード</h1>
-          <p className="text-[10px] text-slate-500">運動・食事・AI週間通信簿・未来体重予測</p>
+          <p className="text-[10px] text-slate-500">運動・食事・週間通信簿・体重の予測（目安）</p>
         </div>
         <div className="flex bg-slate-200/90 p-0.5 rounded-xl shadow-inner gap-0.5 shrink-0">
           <button
@@ -435,7 +448,7 @@ export default function AnalyticsScreen({ dataVersion }) {
             <span className="text-[10px] font-bold text-slate-600">回</span>
           </div>
           <span className="text-[9px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded-lg text-center truncate">
-            {period === 'week' ? `週${totalWorkoutCount}日ペース` : `月${totalWorkoutCount}回実施`}
+            {period === 'week' ? `週${totalWorkoutCount}回` : `月${totalWorkoutCount}回`}
           </span>
         </div>
 
@@ -446,11 +459,13 @@ export default function AnalyticsScreen({ dataVersion }) {
             <span className="text-[10px] font-bold text-slate-600">kcal</span>
           </div>
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-lg text-center truncate ${
-            avgCalories > targetDailyCal
+            !(hasMeals && hasWeight)
+              ? 'bg-slate-100 text-slate-500'
+              : avgCalories > targetDailyCal
               ? 'bg-amber-50 text-amber-700'
               : 'bg-emerald-50 text-emerald-700'
           }`}>
-            収支 {dailyCalorieBalance > 0 ? `+${dailyCalorieBalance}` : dailyCalorieBalance}kcal
+            {hasMeals && hasWeight ? `収支(目安) ${dailyCalorieBalance > 0 ? `+${dailyCalorieBalance}` : dailyCalorieBalance}kcal` : '食事と体重で表示'}
           </span>
         </div>
 
@@ -458,12 +473,12 @@ export default function AnalyticsScreen({ dataVersion }) {
           <div className="text-[10px] font-bold text-slate-500">1ヶ月後予測</div>
           <div className="flex items-baseline gap-0.5">
             <span className="text-lg font-black tracking-tight leading-none text-indigo-700 tabular-nums">
-              {predWeight30d}
+              {canPredict ? predWeight30d : '-'}
             </span>
             <span className="text-[10px] font-bold text-slate-600">kg</span>
           </div>
           <span className="text-[9px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded-lg text-center truncate">
-            現在比 {(predWeight30d - latestWeight).toFixed(1)}kg
+            {canPredict ? `現在比 ${(predWeight30d - latestWeight).toFixed(1)}kg` : '体重2日分で表示'}
           </span>
         </div>
       </div>
@@ -516,7 +531,11 @@ export default function AnalyticsScreen({ dataVersion }) {
           </button>
         </div>
 
-        {activeTab === 'nutrition' && (
+        {activeTab === 'nutrition' && !hasMeals && (
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/70 text-center text-[11px] text-slate-500 leading-relaxed">この期間の食事の記録がまだありません。食事を記録すると、栄養のバランスがここに出ます。</div>
+        )}
+
+        {activeTab === 'nutrition' && hasMeals && (
           <div className="space-y-3">
             <div className="w-full bg-slate-50/70 rounded-xl p-3 border border-slate-200/70 flex justify-center">
               <svg width="250" height="198" viewBox="0 0 250 198" className="overflow-visible">
@@ -624,7 +643,11 @@ export default function AnalyticsScreen({ dataVersion }) {
           </div>
         )}
 
-        {activeTab === 'calories' && (
+        {activeTab === 'calories' && !hasMeals && (
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/70 text-center text-[11px] text-slate-500 leading-relaxed">この期間の食事の記録がまだありません。食事を記録すると、毎日のカロリーがここに出ます。</div>
+        )}
+
+        {activeTab === 'calories' && hasMeals && (
           <div className="space-y-3">
             <div className="bg-slate-50/70 rounded-xl p-3 border border-slate-200/70 space-y-2">
               <div className="flex items-center justify-between">
@@ -709,13 +732,17 @@ export default function AnalyticsScreen({ dataVersion }) {
           </div>
         )}
 
-        {activeTab === 'body' && (
+        {activeTab === 'body' && !canPredict && (
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/70 text-center text-[11px] text-slate-500 leading-relaxed">体重を2日以上記録すると、体重の推移と予測（目安）がここに出ます。</div>
+        )}
+
+        {activeTab === 'body' && canPredict && (
           <div className="space-y-3">
             <div className="bg-slate-50/70 rounded-xl p-3 border border-slate-200/70 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800">体重実績 ＆ 未来予測シミュレーション</span>
                 <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/60">
-                  30日後予想: {predWeight30d}kg
+                  30日後の目安: {predWeight30d}kg
                 </span>
               </div>
 
@@ -730,7 +757,7 @@ export default function AnalyticsScreen({ dataVersion }) {
                     未来予測ライン
                   </span>
                 </div>
-                <span className="text-slate-500 font-bold">目標: {targetWeightGoal.toFixed(1)}kg</span>
+                <span className="text-slate-500 font-bold">目標: {hasGoal ? `${targetWeightGoal.toFixed(1)}kg` : '未設定'}</span>
               </div>
 
               {plottedChartNodes.length > 0 ? (
@@ -807,16 +834,16 @@ export default function AnalyticsScreen({ dataVersion }) {
               <div className="grid grid-cols-3 gap-2 text-center pt-1">
                 <div className="bg-white rounded-lg p-2 border border-slate-200/70">
                   <span className="text-[9px] text-slate-500 font-bold block">1ヶ月後(+30日)</span>
-                  <span className="text-xs font-black text-indigo-700 tabular-nums">{predWeight30d}kg / {predFat30d}%</span>
+                  <span className="text-xs font-black text-indigo-700 tabular-nums">{predWeight30d}kg</span>
                 </div>
                 <div className="bg-white rounded-lg p-2 border border-slate-200/70">
                   <span className="text-[9px] text-slate-500 font-bold block">3ヶ月後(+90日)</span>
-                  <span className="text-xs font-black text-blue-700 tabular-nums">{predWeight90d}kg / {predFat90d}%</span>
+                  <span className="text-xs font-black text-blue-700 tabular-nums">{predWeight90d}kg</span>
                 </div>
                 <div className="bg-emerald-50/70 rounded-lg p-2 border border-emerald-200/70">
                   <span className="text-[9px] text-emerald-800 font-bold block">目標到達予想</span>
                   <span className="text-xs font-black text-emerald-700">
-                    {daysToGoal === 0 ? '達成済' : `${daysToGoal}日後`}
+                    {goalLabel || `${daysToGoal}日後`}
                   </span>
                 </div>
               </div>
@@ -852,7 +879,11 @@ export default function AnalyticsScreen({ dataVersion }) {
           </div>
         )}
 
-        {activeTab === 'insights' && (
+        {activeTab === 'insights' && !canReport && (
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/70 text-center text-[11px] text-slate-500 leading-relaxed">食事を記録し、体重を2日以上記録すると、通信簿がここに出ます。</div>
+        )}
+
+        {activeTab === 'insights' && canReport && (
           <div className="space-y-3">
             <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -868,7 +899,7 @@ export default function AnalyticsScreen({ dataVersion }) {
                 </div>
               </div>
               <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200/80 shrink-0">
-                {goalDateStr}達成圏
+                {goalLabel ? `到達日 ${goalLabel}` : `${goalDateStr}到達の目安`}
               </span>
             </div>
 
@@ -886,11 +917,12 @@ export default function AnalyticsScreen({ dataVersion }) {
         )}
       </section>
 
+      {canReport && (
       <section className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 space-y-3.5">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-xs font-extrabold text-slate-900">📋 AIウィークリー通信簿 ＆ 未来予測レポート</h2>
-            <p className="text-[10px] text-slate-500 mt-0.5">直近7日間の栄養・運動・カロリー収支から自動算出</p>
+            <h2 className="text-xs font-extrabold text-slate-900">📋 {period === 'week' ? '週間' : '月間'}通信簿 ＆ 体重の予測レポート</h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">選んだ期間の記録から計算した、アプリ独自の目安です（体重の予測は直近の記録から計算）</p>
           </div>
           <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-xl border shrink-0 ${rankInfo.pill}`}>
             総合 {rankInfo.rank} 判定 ({weeklyTotalScore}点)
@@ -900,13 +932,13 @@ export default function AnalyticsScreen({ dataVersion }) {
         <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${rankInfo.grad} text-white flex flex-col items-center justify-center shadow-sm shrink-0`}>
-              <span className="text-[8px] font-bold tracking-wider opacity-90">WEEKLY</span>
+              <span className="text-[8px] font-bold tracking-wider opacity-90">{period === 'week' ? 'WEEKLY' : 'MONTHLY'}</span>
               <span className="text-xl font-black leading-none">{rankInfo.rank}</span>
             </div>
             <div className="min-w-0">
               <div className="text-xs font-black text-slate-900 truncate">{rankInfo.label}</div>
               <p className="text-[10px] text-slate-600 mt-0.5 leading-snug">
-                1日平均収支 <span className="font-extrabold text-indigo-700">{dailyCalorieBalance}kcal</span> / 目標体重({targetWeightGoal.toFixed(1)}kg)まであと約<span className="font-extrabold text-emerald-700">{daysToGoal}日</span>
+                1日平均収支（目安） <span className="font-extrabold text-indigo-700">{dailyCalorieBalance}kcal</span> / 目標体重({hasGoal ? `${targetWeightGoal.toFixed(1)}kg` : '未設定'})まで <span className="font-extrabold text-emerald-700">{goalLabel || `約${daysToGoal}日`}</span>
               </p>
             </div>
           </div>
@@ -921,7 +953,7 @@ export default function AnalyticsScreen({ dataVersion }) {
             <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
               <div className="bg-blue-600 h-full rounded-full" style={{ width: `${pfcBalanceScore}%` }} />
             </div>
-            <span className="text-[9px] text-slate-500 block">平均P: {Math.round(avgProtein) || 96}g / 適正F・C維持</span>
+            <span className="text-[9px] text-slate-500 block">平均P: {Math.round(avgProtein)}g</span>
           </div>
 
           <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/70 space-y-1.5">
@@ -932,7 +964,7 @@ export default function AnalyticsScreen({ dataVersion }) {
             <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
               <div className="bg-emerald-600 h-full rounded-full" style={{ width: `${workoutContinuityScore}%` }} />
             </div>
-            <span className="text-[9px] text-slate-500 block">直近実施: {totalWorkoutCount}回 / 合計{partTotalSets}セット</span>
+            <span className="text-[9px] text-slate-500 block">直近実施: {totalWorkoutCount}回 / 合計{totalWorkoutCount > 0 ? partTotalSets : 0}セット</span>
           </div>
         </div>
 
@@ -940,30 +972,28 @@ export default function AnalyticsScreen({ dataVersion }) {
           <div className="flex items-center justify-between text-[10px]">
             <span className="font-extrabold text-indigo-950">🔮 現在のペース維持時の未来体型シミュレーション</span>
             <span className="font-bold text-emerald-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200/70">
-              達成予定: {daysToGoal === 0 ? '達成済' : goalDateStr}
+              到達の目安: {goalLabel || goalDateStr}
             </span>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-white/95 rounded-lg p-2 border border-slate-200/70">
               <span className="text-[9px] text-slate-500 font-bold block">現在</span>
               <span className="text-xs font-black text-slate-900 tabular-nums block">{latestWeight}kg</span>
-              <span className="text-[9px] text-slate-500 block">体脂肪 {latestFat}%</span>
+              <span className="text-[9px] text-slate-500 block">体脂肪 {latestFat ?? '-'}%</span>
             </div>
             <div className="bg-white/95 rounded-lg p-2 border border-indigo-200/80">
               <span className="text-[9px] text-indigo-700 font-bold block">1ヶ月後(+30日)</span>
               <span className="text-xs font-black text-indigo-700 tabular-nums block">{predWeight30d}kg</span>
-              <span className="text-[9px] text-indigo-600 font-bold block">体脂肪 {predFat30d}%</span>
             </div>
             <div className="bg-white/95 rounded-lg p-2 border border-blue-200/80">
               <span className="text-[9px] text-blue-700 font-bold block">3ヶ月後(+90日)</span>
               <span className="text-xs font-black text-blue-700 tabular-nums block">{predWeight90d}kg</span>
-              <span className="text-[9px] text-blue-600 font-bold block">体脂肪 {predFat90d}%</span>
             </div>
           </div>
         </div>
 
         <div className="space-y-2">
-          <div className="text-[11px] font-extrabold text-slate-800">🎯 来週に向けたAIの具体的改善アクション</div>
+          <div className="text-[11px] font-extrabold text-slate-800">🎯 来週に向けたヒント</div>
           {weeklyActionItems.map((actionText, idx) => (
             <div
               key={idx}
@@ -1001,6 +1031,7 @@ export default function AnalyticsScreen({ dataVersion }) {
           </div>
         )}
       </section>
+      )}
 
       <section className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 space-y-3">
         <div className="flex items-center justify-between">

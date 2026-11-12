@@ -10,6 +10,7 @@ import MealScreen from './components/MealScreen';
 import WorkoutHubScreen from './components/WorkoutHubScreen';
 import LoginScreen from './components/LoginScreen';
 import OnboardingGuide from './components/OnboardingGuide';
+import ProfileSetup from './components/ProfileSetup';
 import AiAndBackupSettings from './components/AiAndBackupSettings';
 import { setStoredGeminiKey } from './utils/geminiAnalyzer';
 import { seedOneWeekDemoData, resetAllAppData } from './utils/demoData';
@@ -49,6 +50,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isMobileGuideOpen, setIsMobileGuideOpen] = useState(false);
+  const [isProfileSetupOpen, setIsProfileSetupOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('profile_done', false));
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => Boolean(getCurrentAuthUser()) && !getUserStorageData('onboarding_done', false));
   const [lanIp, setLanIp] = useState('192.168.1.10');
   const [heightCm, setHeightCm] = useState(() => localStorage.getItem('raku_body_height') || localStorage.getItem('raku_user_height') || '170');
@@ -201,6 +203,16 @@ export default function App() {
     setIsOnboardingOpen(false);
   };
 
+  const handleProfileSetupDone = ({ height, targetWeight, targetCalories }) => {
+    setHeightCm(height);
+    setTargetWeightKg(targetWeight);
+    setTargetCaloriesKcal(targetCalories);
+    setIsProfileSetupOpen(false);
+    setDataVersion((v) => v + 1);
+    fetchInitialData();
+    showToast('はじめの設定を保存しました');
+  };
+
   const handleOnboardingStartRecording = () => {
     handleCloseOnboarding();
     setActiveTab('metrics');
@@ -217,6 +229,7 @@ export default function App() {
     setAuthUserSession(userObj);
     setAuthUser(userObj);
     setActiveTab('home');
+    setIsProfileSetupOpen(!getUserStorageData('profile_done', false));
     setIsOnboardingOpen(!getUserStorageData('onboarding_done', false));
     setDataVersion((v) => v + 1);
     fetchInitialData();
@@ -234,6 +247,7 @@ export default function App() {
     clearAuthUserSession();
     setAuthUser(null);
     setIsDrawerOpen(false);
+    setIsProfileSetupOpen(false);
     setIsOnboardingOpen(false);
     setLogs([]);
     setStreakDays(0);
@@ -814,7 +828,14 @@ export default function App() {
           </div>
         )}
 
-        {authUser && isOnboardingOpen && (
+        {authUser && isProfileSetupOpen && (
+          <ProfileSetup
+            onDone={handleProfileSetupDone}
+            onLater={() => setIsProfileSetupOpen(false)}
+          />
+        )}
+
+        {authUser && !isProfileSetupOpen && isOnboardingOpen && (
           <OnboardingGuide
             onClose={handleCloseOnboarding}
             onStartRecording={handleOnboardingStartRecording}

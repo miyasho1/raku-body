@@ -278,7 +278,9 @@ export async function resetAllAppData(targetUid = null) {
     'target_weight',
     'target_calories',
     'body_analysis',
-    'body_analysis_history'
+    'body_analysis_history',
+    'profile_done',
+    'onboarding_done'
   ];
   keys.forEach((k) => removeUserStorageData(k, uid));
   keys.forEach((k) => {
