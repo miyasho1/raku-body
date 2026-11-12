@@ -783,7 +783,6 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={handleImageChange}
               className="hidden"
             />
@@ -1056,7 +1055,6 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
                 ref={nutritionLabelInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handleNutritionLabelChange}
                 className="hidden"
               />

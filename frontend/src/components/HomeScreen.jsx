@@ -915,7 +915,6 @@ export default function HomeScreen({
               ref={quickBodyInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={handleQuickBodyFileChange}
               className="hidden"
             />
@@ -1107,7 +1106,6 @@ export default function HomeScreen({
                   ref={ocrFileInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   onChange={handleOcrFileChange}
                   className="hidden"
                 />

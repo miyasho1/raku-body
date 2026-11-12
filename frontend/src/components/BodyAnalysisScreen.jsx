@@ -217,7 +217,6 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
           ref={currentInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           onChange={handleCurrentChange}
           className="hidden"
           id="current-file-input"
