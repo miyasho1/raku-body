@@ -126,6 +126,7 @@ export function clearGuestSessionData() {
     'selected_goal',
     'body_analysis',
     'body_analysis_history',
+    'body_ideal',
     'profile_done',
     'onboarding_done'
   ];

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import WheelPicker from './WheelPicker';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
+import { loadWorkoutCounts, progressItem, stepLabel, STEP_RULE_TEXT } from '../utils/workoutProgress';
 
 export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecordSuccess, embedded = false }) {
   const homeCourses = {
@@ -8,22 +9,22 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
       id: 'fine_muscle',
       title: '自宅Vシェイプ・引き締め自重',
       badge: '器具なし・15分',
-      reason: 'プッシュアップとプランクを組み合わせ、自宅でも胸板と腹筋のラインをシャープに際立たせます。',
+      reason: 'プッシュアップとプランクを組み合わせ、自宅で胸と腹筋のラインを引き締めることをねらったメニューです。',
       items: [
         { name: 'プッシュアップ（腕立て伏せ）', part: '胸・腕', reps: 15, sets: 3, duration: 0, point: '胸が床すれすれになるまで深く下ろす' },
         { name: 'ワイドスクワット', part: '脚・尻', reps: 20, sets: 3, duration: 0, point: 'つま先を外に向け、内ももとヒップを意識' },
-        { name: 'プランク（体幹キープ）', part: '体幹', reps: 1, sets: 3, duration: 3, point: '頭からかかとまで一直線をキープ（60秒×3）' },
+        { name: 'プランク（体幹キープ）', part: '体幹', reps: 60, unit: '秒', sets: 3, duration: 0, point: '頭からかかとまで一直線をキープする' },
         { name: 'バイシクルクランチ', part: '腹筋', reps: 20, sets: 3, duration: 0, point: 'おへそを見ながら対角の肘と膝を近づける' }
       ]
     },
     diet: {
       id: 'diet',
-      title: '脂肪燃焼HIIT＆有酸素コンボ',
-      badge: '高燃焼・20分',
-      reason: '全身を使った自重サーキットで心拍数を上げた後、有酸素運動を行うことで効率よく体脂肪を燃やします。',
+      title: '脂肪を減らす自重＋有酸素メニュー',
+      badge: '脂肪を減らすねらい・約20分',
+      reason: '全身を使った自重サーキットで心拍数を上げた後、有酸素運動を行い、体脂肪を減らすことをねらったメニューです。',
       items: [
-        { name: 'バーピージャンプ（マイルド可）', part: '全身燃焼', reps: 12, sets: 3, duration: 5, point: '一定のリズムで全身を大きく動かす' },
-        { name: '自重スクワット', part: '下半身', reps: 20, sets: 3, duration: 0, point: '太ももの大きな筋肉を動かして代謝を点火' },
+        { name: 'バーピージャンプ（マイルド可）', part: '全身', reps: 12, sets: 3, duration: 0, point: '一定のリズムで全身を大きく動かす' },
+        { name: '自重スクワット', part: '下半身', reps: 20, sets: 3, duration: 0, point: '太ももの大きな筋肉をしっかり動かす' },
         { name: 'マウンテンクライマー', part: '腹筋・有酸素', reps: 30, sets: 3, duration: 0, point: 'お腹に力を入れたまま素早く脚を入れ替える' },
         { name: '早歩きウォーキング / 踏み台昇降', part: '有酸素', reps: 1, sets: 1, duration: 20, point: '少し息が弾むペースで20分間継続' }
       ]
@@ -31,22 +32,34 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
     bulk_up: {
       id: 'bulk_up',
       title: '高負荷スロー自重トレーニング',
-      badge: '筋肥大・20分',
-      reason: '3秒かけて下ろし3秒かけて上げるスロートレーニング法により、自重でも高重量並みの刺激を与えます。',
+      badge: '筋力アップねらい・約20分',
+      reason: '3秒かけて下ろし、3秒かけて上げるゆっくりした動きで、自重でも筋肉にしっかり負荷をかけることを目指します。',
       items: [
         { name: 'デクライン・プッシュアップ（足上げ）', part: '胸上部', reps: 12, sets: 4, duration: 0, point: '椅子に足を乗せて大胸筋への負荷を高める' },
         { name: 'ブルガリアンスクワット', part: '片脚高負荷', reps: 12, sets: 3, duration: 0, point: '片脚ずつ体重を乗せ、太ももと臀部を追い込む' },
         { name: 'パイクプッシュアップ', part: '肩・三頭筋', reps: 10, sets: 3, duration: 0, point: 'お尻を高く上げて三角筋に負荷を集中させる' }
       ]
     },
+    run: {
+      id: 'run',
+      title: 'カジュアル・ランニング',
+      badge: '有酸素＋無酸素・約35〜40分',
+      reason: '会話できるくらいのゆっくりしたジョギング（有酸素運動）で長く動き、短いダッシュ（無酸素運動）で心肺と脚の筋肉にも刺激を入れます。走るのがきついときは、早歩きに替えてOKです。',
+      items: [
+        { name: 'ウォーミングアップ（早歩き）', part: '有酸素', fixed: true, reps: 1, sets: 1, duration: 5, point: '腕を大きく振って、体を温める' },
+        { name: 'ジョギング（会話できるペース）', part: '有酸素', reps: 1, sets: 1, duration: 15, point: '息が上がりすぎない速さで、止まらずに続ける' },
+        { name: 'インターバル走（30秒ダッシュ＋90秒歩く）', part: '無酸素', reps: 6, sets: 1, duration: 0, point: '30秒だけ速く走り、90秒歩いて息を整える。これを1本と数える' },
+        { name: 'クールダウン（歩く＋ストレッチ）', part: '整える', fixed: true, reps: 1, sets: 1, duration: 5, point: 'ゆっくり歩いてから、ももとふくらはぎを伸ばす' }
+      ]
+    },
     health: {
       id: 'health',
       title: 'リフレッシュ・姿勢＆体幹ケア',
       badge: '習慣化・10分',
-      reason: '関節に優しい自重運動とストレッチ要素で、血流を促進し日々のコンディションを整えます。',
+      reason: '関節への負担が少ない自重運動とストレッチで、無理なく体を動かす習慣づくりを目指します。',
       items: [
-        { name: 'スロースクワット', part: '下半身', reps: 12, sets: 2, duration: 0, point: '膝がつま先より前に出ないよう椅子に座る軌道で' },
-        { name: 'プランク（体幹キープ）', part: '体幹', reps: 1, sets: 2, duration: 2, point: '腰を反らさずお腹を凹ませた状態をキープ' },
+        { name: 'スロースクワット', part: '下半身', reps: 12, sets: 2, duration: 0, point: '膝とつま先の向きをそろえ、椅子に座るように腰を下ろす' },
+        { name: 'プランク（体幹キープ）', part: '体幹', reps: 30, unit: '秒', sets: 2, duration: 0, point: '腰を反らさずお腹を凹ませた状態をキープ' },
         { name: 'ウォーキング・散歩', part: '有酸素', reps: 1, sets: 1, duration: 15, point: '背筋を伸ばし、腕を振ってリズミカルに歩く' }
       ]
     }
@@ -55,6 +68,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
   const homeCategories = {
     '自重（上半身・体幹）': ['プッシュアップ（腕立て伏せ）', 'プランク（体幹キープ）', 'クランチ（腹筋）', 'バイシクルクランチ', 'バックエクステンション（背筋）'],
     '自重（下半身）': ['自重スクワット', 'ワイドスクワット', 'ブルガリアンスクワット', 'ヒップリフト', 'フロントランジ'],
+    'ラン（有酸素・無酸素）': ['ジョギング（会話できるペース）', '早歩きとジョグの交互', 'インターバル走（30秒ダッシュ＋90秒歩く）', '坂道ダッシュ', 'ビルドアップ走（だんだん速く）'],
     '有酸素・燃焼': ['ウォーキング・早歩き', 'ジョギング・ランニング', 'バーピージャンプ', 'エアロバイク / ステッパー', '全身ストレッチ・ヨガ']
   };
 
@@ -69,14 +83,17 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
   const [menuName, setMenuName] = useState('プッシュアップ（腕立て伏せ）');
   const [sets, setSets] = useState(3);
   const [reps, setReps] = useState(15);
+  const [timedOverride, setTimedOverride] = useState(null);
+  const unitForName = (name) => (/プランク/.test(name || '') ? '秒' : /インターバル|ダッシュ/.test(name || '') ? '本' : '回');
   const [durationMin, setDurationMin] = useState(15);
   const [note, setNote] = useState('');
   const [workouts, setWorkouts] = useState([]);
+  const [workoutCounts, setWorkoutCounts] = useState(() => loadWorkoutCounts());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBatchSubmitting, setIsBatchSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
 
-  const repsOptions = Array.from({ length: 50 }, (_, i) => i + 1);
+  const repsOptions = Array.from({ length: 120 }, (_, i) => i + 1);
   const setsOptions = Array.from({ length: 10 }, (_, i) => i + 1);
   const durationOptions = Array.from({ length: 24 }, (_, i) => (i + 1) * 5);
 
@@ -88,6 +105,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
     if (presetWorkout) {
       setActiveMainTab('record');
       setMenuName(presetWorkout.name);
+      setTimedOverride(false);
       if (presetWorkout.sets) setSets(presetWorkout.sets);
       if (presetWorkout.reps) setReps(presetWorkout.reps);
       if (presetWorkout.point) setNote(presetWorkout.point);
@@ -113,6 +131,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
   };
 
   const fetchWorkouts = async () => {
+    setWorkoutCounts(loadWorkoutCounts());
     try {
       const res = await fetch('/api/workouts?workout_type=home');
       if (res.ok) {
@@ -139,9 +158,10 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
 
   const handleSelectCourseItem = (item) => {
     setMenuName(item.name);
+    setTimedOverride(item.duration > 0);
     setReps(item.reps);
     setSets(item.sets);
-    setDurationMin(item.duration || 10);
+    if (item.duration > 0) setDurationMin(item.duration);
     setNote(item.point);
     setActiveMainTab('record');
     setMessage({ type: 'success', text: `「${item.name}」をセットしました` });
@@ -154,7 +174,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
     setMessage(null);
 
     try {
-      for (const item of course.items) {
+      for (const item of course.items.map((it) => progressItem(it, workoutCounts))) {
         const payload = {
           workout_type: 'home',
           menu_name: item.name,
@@ -162,6 +182,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
           reps: item.reps,
           weight: 0,
           duration_min: item.duration || 0,
+          ...(unitForName(item.name) !== '回' ? { unit: unitForName(item.name) } : {}),
           note: `【${course.title}】${item.point}`
         };
         try {
@@ -193,7 +214,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
     setIsSubmitting(true);
     setMessage(null);
 
-    const isCardio = activeCat === '有酸素・燃焼';
+    const isCardio = timedOverride !== null ? timedOverride : activeCat === '有酸素・燃焼' || activeCat === 'ラン（有酸素・無酸素）';
     const payload = {
       workout_type: 'home',
       menu_name: menuName,
@@ -201,6 +222,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
       reps: isCardio ? 1 : parseInt(reps, 10),
       weight: 0,
       duration_min: isCardio ? parseInt(durationMin, 10) : 0,
+      ...(!isCardio && unitForName(menuName) !== '回' ? { unit: unitForName(menuName) } : {}),
       note: note
     };
 
@@ -227,7 +249,8 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
   };
 
   const currentCourse = homeCourses[selectedCourseKey];
-  const isCardioCategory = activeCat === '有酸素・燃焼';
+  const isCardioCategory = timedOverride !== null ? timedOverride : activeCat === '有酸素・燃焼' || activeCat === 'ラン（有酸素・無酸素）';
+  const progressedItems = currentCourse.items.map((it) => progressItem(it, workoutCounts));
   const totalSetsCount = workouts.reduce((sum, w) => sum + (w.sets || 1), 0);
   const totalMinutes = workouts.reduce((sum, w) => sum + (w.duration_min || (w.sets || 1) * 3), 0);
   const estimatedBurnKcal = Math.round(totalSetsCount * 14 + totalMinutes * 4);
@@ -280,7 +303,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            ✨ AIコース
+            📋 おすすめコース
           </button>
           <button
             type="button"
@@ -298,13 +321,14 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
         {activeMainTab === 'record' && (
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
+              <div className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl">
                 {Object.keys(homeCategories).map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => {
                       setActiveCat(cat);
+                      setTimedOverride(null);
                       setMenuName(homeCategories[cat][0]);
                     }}
                     className={`py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer truncate px-1 ${
@@ -313,7 +337,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                         : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
-                    {cat === '自重（上半身・体幹）' ? '上半身・体幹' : cat === '自重（下半身）' ? '下半身' : '有酸素・燃焼'}
+                    {cat === '自重（上半身・体幹）' ? '上半身・体幹' : cat === '自重（下半身）' ? '下半身' : cat === 'ラン（有酸素・無酸素）' ? 'ラン' : '有酸素・燃焼'}
                   </button>
                 ))}
               </div>
@@ -323,7 +347,10 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => setMenuName(m)}
+                    onClick={() => {
+                      setMenuName(m);
+                      setTimedOverride(null);
+                    }}
                     className={`text-left text-[11px] px-2.5 py-2 rounded-xl border transition-all font-bold truncate cursor-pointer ${
                       menuName === m
                         ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
@@ -341,7 +368,10 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
               <input
                 type="text"
                 value={menuName}
-                onChange={(e) => setMenuName(e.target.value)}
+                onChange={(e) => {
+                  setMenuName(e.target.value);
+                  setTimedOverride(null);
+                }}
                 className="w-48 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-900 text-right focus:outline-none focus:border-blue-500"
                 required
               />
@@ -349,7 +379,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
 
             <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/80 space-y-1.5">
               <div className="grid grid-cols-2 text-center text-[10px] font-bold text-slate-500">
-                <span>{isCardioCategory ? '運動時間 (分)' : '回数 (回)'}</span>
+                <span>{isCardioCategory ? '運動時間 (分)' : `回数 (${unitForName(menuName)})`}</span>
                 <span>セット数</span>
               </div>
 
@@ -409,18 +439,19 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                 ? '保存中...'
                 : isCardioCategory
                 ? `記録を保存（${durationMin}分 × ${sets}セット）`
-                : `記録を保存（${reps}回 × ${sets}セット）`}
+                : `記録を保存（${reps}${unitForName(menuName)} × ${sets}セット）`}
             </button>
           </form>
         )}
 
         {activeMainTab === 'ai' && (
           <div className="space-y-2.5">
-            <div className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl">
+            <div className="grid grid-cols-5 gap-1 bg-slate-100 p-1 rounded-xl">
               {[
                 { key: 'fine_muscle', label: '引き締め' },
                 { key: 'diet', label: '脂肪燃焼' },
-                { key: 'bulk_up', label: '高負荷自重' },
+                { key: 'run', label: 'ラン' },
+                { key: 'bulk_up', label: '高負荷' },
                 { key: 'health', label: '姿勢・体幹' }
               ].map((tab) => (
                 <button
@@ -446,9 +477,10 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-snug">{currentCourse.reason}</p>
+              <p className="text-[10px] text-slate-500 leading-relaxed">{STEP_RULE_TEXT}</p>
 
               <div className="grid grid-cols-2 gap-2">
-                {currentCourse.items.map((item, idx) => (
+                {progressedItems.map((item, idx) => (
                   <div
                     key={idx}
                     onClick={() => handleSelectCourseItem(item)}
@@ -460,9 +492,12 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                       </span>
                       <span className="text-[10px] text-blue-600 font-bold">反映 ›</span>
                     </div>
-                    <span className="text-[11px] font-bold text-slate-900 truncate">{item.name}</span>
+                    <span className="text-[11px] font-bold text-slate-900 leading-tight">{item.name}</span>
                     <span className="text-[10px] font-bold text-slate-500">
-                      {item.duration > 0 ? `${item.duration}分` : `${item.reps}回`} × {item.sets}set
+                      {item.duration > 0 ? `${item.duration}分` : `${item.reps}${item.unit || (item.part === '無酸素' ? '本' : '回')}`} × {item.sets}set
+                    </span>
+                    <span className={`text-[9px] font-bold ${item.step > 1 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                      {stepLabel(item.step)}・これまで{item.count}回
                     </span>
                   </div>
                 ))}
@@ -495,7 +530,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                       <span className="text-[9px] text-slate-400 shrink-0">{w.log_date?.slice(5)}</span>
                     </div>
                     <div className="text-[10px] font-bold text-blue-600">
-                      {w.duration_min > 0 ? `${w.duration_min}分` : `${w.reps}回`} × {w.sets}set
+                      {w.duration_min > 0 ? `${w.duration_min}分` : `${w.reps}${w.unit || '回'}`} × {w.sets}set
                     </div>
                   </div>
                 ))}
@@ -561,6 +596,8 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                 key={w.id || idx}
                 onClick={() => {
                   setMenuName(w.menu_name || 'プッシュアップ（腕立て伏せ）');
+                  setTimedOverride(w.duration_min > 0);
+                  if (w.duration_min > 0) setDurationMin(w.duration_min);
                   if (w.reps !== undefined) setReps(w.reps);
                   if (w.sets !== undefined) setSets(w.sets);
                   if (w.duration_min) setDurationMin(w.duration_min);
@@ -578,7 +615,7 @@ export default function HomeWorkoutScreen({ goal, presetWorkout, onBack, onRecor
                       <span className="text-[9px] text-slate-400 font-bold shrink-0">{w.log_date?.slice(5)}</span>
                     </div>
                     <p className="text-[10px] text-blue-700 font-bold mt-0.5">
-                      {w.duration_min > 0 ? `${w.duration_min}分` : `${w.reps || 15}回`} × {w.sets || 3}セット
+                      {w.duration_min > 0 ? `${w.duration_min}分` : `${w.reps ?? '-'}${w.unit || '回'}`} × {w.sets ?? '-'}セット
                     </p>
                   </div>
                 </div>

@@ -279,6 +279,7 @@ export async function resetAllAppData(targetUid = null) {
     'target_calories',
     'body_analysis',
     'body_analysis_history',
+    'body_ideal',
     'profile_done',
     'onboarding_done'
   ];

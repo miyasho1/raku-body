@@ -12,20 +12,13 @@ export async function processPrivacyImage(file, shouldCropFace = true) {
     return { processedFile: null, previewUrl: '' };
   }
 
-  if (!shouldCropFace) {
-    return {
-      processedFile: file,
-      previewUrl: URL.createObjectURL(file)
-    };
-  }
-
   return new Promise((resolve) => {
     const tempUrl = URL.createObjectURL(file);
     const img = new Image();
 
     img.onload = () => {
       try {
-        const cropRatio = 0.18;
+        const cropRatio = shouldCropFace ? 0.18 : 0;
         const srcWidth = img.naturalWidth || img.width || 600;
         const srcHeight = img.naturalHeight || img.height || 800;
         const cropY = Math.round(srcHeight * cropRatio);
@@ -422,7 +415,7 @@ export async function analyzeBodyImage(imageFile) {
     const mimeType = imageFile.type || 'image/jpeg';
 
     const prompt = `あなたはプロのパーソナルトレーナー・体型骨格診断AIです。
-写真からユーザーの体型タイプ、推定体脂肪率、筋肉発達バランス（腕・胸・ウエスト・脚：各1〜5点）、部位別ギャップ、おすすめメニュー、アドバイスを分析し、以下のJSON形式のみを出力してください。
+写真からユーザーの体型タイプ、推定体脂肪率、部位ごとの点数（肩・胸・腕・お腹の引き締まり・脚：各1〜5の整数。肩・胸・腕・脚は 1=筋肉が少ない〜5=とても発達している、お腹の引き締まりは 1=お腹周りがゆるい〜5=とても引き締まっている）、部位別ギャップ、おすすめメニュー、アドバイスを分析し、以下のJSON形式のみを出力してください。
 
 {
   "body_type": "逆三角形・アスリート型（または標準・細身・筋肉質など）",
@@ -431,8 +424,9 @@ export async function analyzeBodyImage(imageFile) {
   "analysis_summary": "胸板と肩のラインが発達しており、姿勢も良好です。",
   "focus_areas": ["大胸筋・厚み", "背中・逆三角形", "体幹・くびれ"],
   "body_scores": {
-    "arms": 4,
+    "shoulders": 4,
     "chest": 4,
+    "arms": 3,
     "waist": 2,
     "legs": 3
   },

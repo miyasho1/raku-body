@@ -13,6 +13,7 @@ import OnboardingGuide from './components/OnboardingGuide';
 import ProfileSetup from './components/ProfileSetup';
 import AiAndBackupSettings from './components/AiAndBackupSettings';
 import AdminScreen from './components/AdminScreen';
+import { GOAL_OPTIONS, getSavedGoal, saveGoal, goalLabel } from './utils/goals';
 import { refreshServerUser, signOutServer, flushPending } from './utils/serverSync';
 import { setStoredGeminiKey } from './utils/geminiAnalyzer';
 import { seedOneWeekDemoData, resetAllAppData } from './utils/demoData';
@@ -186,7 +187,7 @@ export default function App() {
       const goalRes = await fetch('/api/goal');
       if (goalRes.ok) {
         const goalData = await goalRes.json();
-        if (goalData.goal) {
+        if (goalData.goal && !getSavedGoal()) {
           setGoal(goalData.goal);
           if (goalData.goal.target_focus) {
             localStorage.setItem('raku_selected_goal', goalData.goal.target_focus);
@@ -220,7 +221,13 @@ export default function App() {
     setIsOnboardingOpen(false);
   };
 
-  const handleProfileSetupDone = ({ height, targetWeight, targetCalories }) => {
+  const applyGoal = (key) => {
+    if (!key) return;
+    setGoal((prev) => ({ ...prev, target_focus: key, preset_name: goalLabel(key) }));
+  };
+
+  const handleProfileSetupDone = ({ height, targetWeight, targetCalories, goal: chosenGoal }) => {
+    applyGoal(chosenGoal);
     setHeightCm(height);
     setTargetWeightKg(targetWeight);
     setTargetCaloriesKcal(targetCalories);
@@ -252,6 +259,7 @@ export default function App() {
     if (savedHeight) setHeightCm(String(savedHeight));
     if (savedTarget) setTargetWeightKg(String(savedTarget));
     if (savedCalories) setTargetCaloriesKcal(String(savedCalories));
+    applyGoal(getSavedGoal());
     setIsProfileSetupOpen(!getUserStorageData('profile_done', false));
     setIsOnboardingOpen(!getUserStorageData('onboarding_done', false));
     setDataVersion((v) => v + 1);
@@ -721,6 +729,23 @@ export default function App() {
                       />
                       <span className="text-[10px] font-bold text-slate-500">kg</span>
                     </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80">
+                    <label className="text-[11px] font-bold text-slate-700 shrink-0">目的</label>
+                    <select
+                      value={getSavedGoal() || ''}
+                      onChange={(e) => {
+                        saveGoal(e.target.value);
+                        applyGoal(e.target.value);
+                      }}
+                      className="text-xs font-extrabold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 focus:outline-none focus:border-blue-500"
+                    >
+                      {!getSavedGoal() && <option value="" disabled>未設定</option>}
+                      {GOAL_OPTIONS.map((g) => (
+                        <option key={g.key} value={g.key}>{g.label}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="flex items-center justify-between gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80">

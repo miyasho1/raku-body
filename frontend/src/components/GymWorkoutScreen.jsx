@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import WheelPicker from './WheelPicker';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
+import { loadWorkoutCounts, progressItem, stepLabel, STEP_RULE_TEXT } from '../utils/workoutProgress';
 
 export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecordSuccess, embedded = false }) {
   const gymCourses = {
     fine_muscle: {
       id: 'fine_muscle',
       title: '細マッチョ・Vシェイプ集中',
-      badge: '推奨：週2〜3回',
+      badge: '目安：週2〜3回',
       target: '胸・背中・肩のアウトライン強調',
-      reason: '大胸筋上部と広背筋・三角筋をマシンで安全に追い込み、逆三角形のシルエットを作ります。',
+      reason: '大胸筋と広背筋・三角筋をマシンで鍛え、逆三角形のシルエットを目指すメニューです。',
       items: [
         { name: 'チェストプレスマシン', part: '胸', weight: 35, reps: 12, sets: 3, point: '肩甲骨を寄せて胸を張り、大胸筋の収縮を意識' },
         { name: 'ラットプルダウン', part: '背中', weight: 35, reps: 12, sets: 3, point: '鎖骨に向かってバーを引き、広背筋でコントロール' },
@@ -20,38 +21,38 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
     bulk_up: {
       id: 'bulk_up',
       title: '筋肥大・バルクアップ高重量',
-      badge: '推奨：週3〜4回',
+      badge: '目安：週3〜4回',
       target: 'BIG3中心・全身の筋量最大化',
-      reason: '高重量コンパウンド種目で大筋群に強いメカニカルストレスを与え、厚みのある体を作ります。',
+      reason: '複数の関節を使う種目で大きな筋肉に負荷をかけ、厚みのある体を目指すメニューです。',
       items: [
         { name: 'ベンチプレス（または高重量チェストプレス）', part: '胸', weight: 55, reps: 8, sets: 4, point: '胸のボトムで止めず爆発的に挙上する' },
-        { name: 'バーベルスクワット / レッグプレス', part: '脚', weight: 80, reps: 10, sets: 4, point: '下半身の大筋群を動員し成長ホルモン分泌を促進' },
+        { name: 'バーベルスクワット / レッグプレス', part: '脚', weight: 80, reps: 10, sets: 4, point: '下半身の大きな筋肉をしっかり使う' },
         { name: 'シーテッドローイング', part: '背中', weight: 45, reps: 10, sets: 3, point: '背中の厚みを出すため肘を深く後ろへ引く' },
         { name: 'ケーブルプレスダウン', part: '腕', weight: 20, reps: 12, sets: 3, point: '肘を固定して上腕三頭筋を最後まで収縮させる' }
       ]
     },
     diet: {
       id: 'diet',
-      title: '脂肪燃焼・代謝アップ全身',
-      badge: '推奨：週2〜3回',
+      title: '脂肪を減らす全身メニュー',
+      badge: '目安：週2〜3回',
       target: '下半身＋背中の大筋群サーキット',
-      reason: '全身の筋肉の70%が集まる脚と背中を中心に動かし、アフターバーン効果で消費カロリーを最大化します。',
+      reason: '大きな筋肉が集まる脚と背中を中心に動かし、消費カロリーを増やすことをねらったメニューです。',
       items: [
         { name: 'レッグプレスマシン', part: '脚', weight: 60, reps: 15, sets: 3, point: '高回数で太もも・ヒップの大きな筋肉を刺激' },
-        { name: 'ラットプルダウン', part: '背中', weight: 30, reps: 15, sets: 3, point: '背中の褐色脂肪細胞周辺を刺激して代謝向上' },
+        { name: 'ラットプルダウン', part: '背中', weight: 30, reps: 15, sets: 3, point: '背中の大きな筋肉を意識して引く' },
         { name: 'チェストプレスマシン', part: '胸', weight: 25, reps: 15, sets: 3, point: 'インターバルを45秒に短縮し心拍数を維持' },
-        { name: 'トレッドミル傾斜ウォーキング', part: '有酸素', weight: 0, reps: 20, sets: 1, point: '筋トレ後に傾斜5%・早歩き20分で脂肪燃焼加速' }
+        { name: 'トレッドミル傾斜ウォーキング', part: '有酸素', weight: 0, reps: 1, duration: 20, sets: 1, point: '筋トレ後に、傾斜をつけて早歩きで20分' }
       ]
     },
     health: {
       id: 'health',
-      title: '姿勢改善・スマート健康維持',
-      badge: '推奨：週1〜2回',
+      title: '姿勢を意識した健康メニュー',
+      badge: '目安：週1〜2回',
       target: '背中・体幹・股関節の連動強化',
-      reason: 'デスクワークによる猫背や巻き肩をリセットし、疲れにくい機能的な身体を整えます。',
+      reason: 'デスクワークで丸まりがちな背中や肩を動かし、姿勢を整えることを目指すメニューです。',
       items: [
-        { name: 'シーテッドローイング（軽重量）', part: '背中', weight: 25, reps: 15, sets: 3, point: '肩甲骨を寄せる意識で巻き肩・猫背を改善' },
-        { name: 'レッグエクステンション', part: '脚', weight: 25, reps: 15, sets: 2, point: '膝周りの安定性を高め日常の歩行を軽快に' },
+        { name: 'シーテッドローイング（軽重量）', part: '背中', weight: 25, reps: 15, sets: 3, point: '肩甲骨を寄せる意識で引く' },
+        { name: 'レッグエクステンション', part: '脚', weight: 25, reps: 15, sets: 2, point: '太ももの前側を意識してゆっくり動かす' },
         { name: 'チェストプレスマシン', part: '胸', weight: 20, reps: 12, sets: 2, point: '呼吸を止めずに丁寧なフォームで動作' }
       ]
     }
@@ -78,6 +79,7 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
   const [sets, setSets] = useState(3);
   const [note, setNote] = useState('');
   const [workouts, setWorkouts] = useState([]);
+  const [workoutCounts, setWorkoutCounts] = useState(() => loadWorkoutCounts());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBatchSubmitting, setIsBatchSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
@@ -120,6 +122,7 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
   };
 
   const fetchWorkouts = async () => {
+    setWorkoutCounts(loadWorkoutCounts());
     try {
       const res = await fetch('/api/workouts?workout_type=gym');
       if (res.ok) {
@@ -160,14 +163,14 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
     setMessage(null);
 
     try {
-      for (const item of course.items) {
+      for (const item of course.items.map((it) => progressItem(it, workoutCounts))) {
         const payload = {
           workout_type: 'gym',
           menu_name: item.name,
           sets: item.sets,
           reps: item.reps,
           weight: item.weight,
-          duration_min: 0,
+          duration_min: item.duration || 0,
           note: `【${course.title}】${item.point}`
         };
         try {
@@ -232,6 +235,7 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
   };
 
   const currentCourse = gymCourses[selectedCourseKey];
+  const progressedItems = currentCourse.items.map((it) => progressItem(it, workoutCounts));
   const totalSetsCount = workouts.reduce((sum, w) => sum + (w.sets || 1), 0);
   const totalVolumeKg = Math.round(
     workouts.reduce((sum, w) => sum + (w.weight || 0) * (w.reps || 10) * (w.sets || 1), 0)
@@ -286,7 +290,7 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            ✨ AIコース
+            📋 おすすめコース
           </button>
           <button
             type="button"
@@ -448,9 +452,10 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 leading-snug">{currentCourse.reason}</p>
+              <p className="text-[10px] text-slate-500 leading-relaxed">{STEP_RULE_TEXT}</p>
 
               <div className="grid grid-cols-2 gap-2">
-                {currentCourse.items.map((item, idx) => (
+                {progressedItems.map((item, idx) => (
                   <div
                     key={idx}
                     onClick={() => handleSelectCourseItem(item)}
@@ -464,7 +469,10 @@ export default function GymWorkoutScreen({ goal, presetWorkout, onBack, onRecord
                     </div>
                     <span className="text-[11px] font-bold text-slate-900 truncate">{item.name}</span>
                     <span className="text-[10px] font-bold text-slate-500">
-                      {item.weight > 0 ? `${item.weight}kg` : '自重'} × {item.reps}回 × {item.sets}set
+                      {item.duration > 0 ? `${item.duration}分` : `${item.weight > 0 ? `${item.weight}kg` : '自重'} × ${item.reps}回`} × {item.sets}set
+                    </span>
+                    <span className={`text-[9px] font-bold ${item.step > 1 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                      {stepLabel(item.step)}・これまで{item.count}回
                     </span>
                   </div>
                 ))}

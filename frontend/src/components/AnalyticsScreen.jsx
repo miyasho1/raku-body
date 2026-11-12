@@ -220,6 +220,7 @@ export default function AnalyticsScreen({ dataVersion }) {
 
   filteredWorkouts.forEach((w) => {
     const txt = `${w.menu_name || ''} ${w.note || ''}`;
+    if (/ジョギング|ランニング|ダッシュ|ジョグ|ウォーキング|早歩き|走|ストレッチ|ヨガ|エアロバイク|ステッパー|踏み台/.test(w.menu_name || '')) return;
     if (txt.includes('胸') || txt.includes('チェスト') || txt.includes('ベンチ') || txt.includes('プッシュアップ')) {
       partMap['胸'] += w.sets || 1;
     } else if (txt.includes('背中') || txt.includes('ラット') || txt.includes('デッド') || txt.includes('ローイング')) {

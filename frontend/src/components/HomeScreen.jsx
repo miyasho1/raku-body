@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  analyzeBodyImage,
   analyzeNutritionLabelImage,
   processPrivacyImage,
   revokeImagePreviewUrl
@@ -11,6 +10,7 @@ import {
   getActiveMyProtein
 } from '../utils/demoData';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
+import { analyzeBodyPhoto, compareToIdeal, BODY_PHOTO_MESSAGES } from '../utils/bodyCompare';
 import WeightTrendCard from './WeightTrendCard';
 import FirstStepsCard from './FirstStepsCard';
 
@@ -349,12 +349,20 @@ export default function HomeScreen({
     if (!croppedBodyFile || isBodyAnalyzing) return;
     setIsBodyAnalyzing(true);
     try {
-      const result = await analyzeBodyImage(croppedBodyFile);
-      if (!result) {
-        setQuickBodyError('AIで分析できませんでした（AIの設定がない、通信に失敗した、または写真から読み取れなかった）。メニューの「AI（Gemini）の設定」を確認してください。');
+      const outcome = await analyzeBodyPhoto(croppedBodyFile);
+      if (outcome.status !== 'ok') {
+        setQuickBodyError(BODY_PHOTO_MESSAGES[outcome.status]);
         setQuickBodyResult(null);
         return;
       }
+      const ideal = getUserStorageData('body_ideal', null);
+      const cmp = ideal ? compareToIdeal(outcome.metrics, ideal.metrics) : null;
+      const result = {
+        ...outcome.analysis,
+        ideal_id: ideal ? ideal.id : null,
+        closeness: cmp ? cmp.closeness : null,
+        mean_gap: cmp ? cmp.meanGap : null
+      };
       setQuickBodyError('');
       setQuickBodyResult(result);
       setUserStorageData('body_analysis', result);
@@ -507,12 +515,12 @@ export default function HomeScreen({
               </svg>
             </div>
             <span className="text-[9px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md border border-indigo-200/70">
-              🔒 上部カット
+              🔒 顔チェック
             </span>
           </div>
           <div>
             <span className="text-xs font-extrabold text-slate-900 block leading-snug">理想体型・AI画像分析</span>
-            <p className="text-[10px] text-slate-500 mt-0.5 truncate">上部18%カット・送信後に端末内の画像を破棄</p>
+            <p className="text-[10px] text-slate-500 mt-0.5 truncate">送る前に顔をチェック・理想との近さを数値で</p>
           </div>
           <div className="w-full py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-indigo-600 text-[11px] font-bold text-center">
             AI体型診断を開く ›
@@ -895,7 +903,7 @@ export default function HomeScreen({
                   🛡️ 上部18%自動カット
                 </span>
                 <span className="text-[10px] text-slate-500 block">
-                  写真の上18%を一律に切り取ってからAI解析（顔を検出しているわけではありません）
+                  ONのときは写真の上18%を切り取ります。送る前に、顔が写っていないかを端末の中で調べ、写っていれば送りません（見落とすこともあるので、首から下を撮ってください）
                 </span>
               </div>
               <button
@@ -962,8 +970,11 @@ export default function HomeScreen({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-700 leading-relaxed">
-                  {quickBodyResult.analysis_summary}
+                  {quickBodyResult.analysis_summary || quickBodyResult.summary}
                 </p>
+                {Number.isFinite(quickBodyResult.closeness) && (
+                  <p className="text-[11px] font-bold text-indigo-700">理想への近さ {quickBodyResult.closeness}%（くわしくは体型分析の画面で）</p>
+                )}
               </div>
             )}
 

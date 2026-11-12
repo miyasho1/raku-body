@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
+import { GOAL_OPTIONS, getSavedGoal, saveGoal } from '../utils/goals';
 
 const toTodayStr = () => {
   const d = new Date();
@@ -13,6 +14,7 @@ export default function ProfileSetup({ onDone, onLater }) {
   const [weight, setWeight] = useState('');
   const [targetWeight, setTargetWeight] = useState('');
   const [targetCalories, setTargetCalories] = useState('2000');
+  const [goal, setGoal] = useState(() => getSavedGoal());
   const [error, setError] = useState('');
 
   const handleSubmit = (e) => {
@@ -21,6 +23,10 @@ export default function ProfileSetup({ onDone, onLater }) {
     const w = parseFloat(weight);
     const tw = parseFloat(targetWeight);
     const tc = parseInt(targetCalories, 10);
+    if (!goal) {
+      setError('目的を1つ選んでください。');
+      return;
+    }
     if (!inRange(h, 100, 230)) {
       setError('身長は100〜230cmの数字で入れてください。');
       return;
@@ -61,8 +67,9 @@ export default function ProfileSetup({ onDone, onLater }) {
       list.push({ id: `metric_${Date.now()}`, date: todayStr, weight: w });
     }
     setUserStorageData('metrics', list);
+    saveGoal(goal);
     setUserStorageData('profile_done', true);
-    onDone({ height: hStr, targetWeight: twStr, targetCalories: tcStr });
+    onDone({ height: hStr, targetWeight: twStr, targetCalories: tcStr, goal });
   };
 
   const field = (label, unit, value, setValue, placeholder) => (
@@ -105,8 +112,27 @@ export default function ProfileSetup({ onDone, onLater }) {
           </div>
         </div>
         <p className="text-[11px] text-slate-600 leading-relaxed">
-          入れた数字は、体重の推移や目標までの目安に使います。今の体重は、今日の体重の記録として保存されます。身長と目標は、あとでメニューから変えられます。体重は「体重推移」の画面で記録し直せます。
+          入れた数字は、体重の推移や目標までの目安に使います。今の体重は、今日の体重の記録として保存されます。身長・目標・目的は、あとでメニューから変えられます。体重は「体重推移」の画面で記録し直せます。
         </p>
+        <div className="space-y-2.5">
+          <span className="text-[10px] font-bold text-slate-500 block">目的（運動メニューのおすすめが変わります）</span>
+          <div className="grid grid-cols-2 gap-2.5">
+            {GOAL_OPTIONS.map((g) => (
+              <button
+                key={g.key}
+                type="button"
+                onClick={() => {
+                  setGoal(g.key);
+                  setError('');
+                }}
+                className={`px-3.5 py-2 rounded-xl border text-left cursor-pointer ${goal === g.key ? 'bg-blue-50 border-blue-400' : 'bg-white border-slate-200'}`}
+              >
+                <span className={`text-xs font-extrabold block ${goal === g.key ? 'text-blue-700' : 'text-slate-800'}`}>{g.label}</span>
+                <span className="text-[10px] text-slate-500 block">{g.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-2.5">
           {field('身長', 'cm', height, setHeight, '例 170')}
           {field('今の体重', 'kg', weight, setWeight, '例 65.0')}
