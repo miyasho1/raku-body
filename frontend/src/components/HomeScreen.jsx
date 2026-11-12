@@ -51,6 +51,8 @@ export default function HomeScreen({
   const [bodyPreviewUrl, setBodyPreviewUrl] = useState('');
   const [isBodyAnalyzing, setIsBodyAnalyzing] = useState(false);
   const [quickBodyResult, setQuickBodyResult] = useState(null);
+  const [quickBodyError, setQuickBodyError] = useState('');
+  const [ocrAiResult, setOcrAiResult] = useState(null);
 
   const [todayMealLogged, setTodayMealLogged] = useState(false);
   const [todayProteinLogged, setTodayProteinLogged] = useState(false);
@@ -265,17 +267,23 @@ export default function HomeScreen({
 
     setIsOcrRunning(true);
     setOcrMessage(null);
+    setOcrAiResult(null);
     const tempPreview = URL.createObjectURL(file);
 
     try {
       const extracted = await analyzeNutritionLabelImage(file);
-      setOcrName(extracted.product_name || 'マイプロテイン');
-      setOcrServingG(extracted.serving_size_g || 30.0);
-      setOcrCalories(extracted.calories || 120);
-      setOcrProteinG(extracted.protein_g !== undefined ? extracted.protein_g : 24.0);
-      setOcrFatG(extracted.fat_g !== undefined ? extracted.fat_g : 1.0);
-      setOcrCarbsG(extracted.carbs_g !== undefined ? extracted.carbs_g : 2.0);
-      setOcrMessage('成分表ラベルから栄養素を自動抽出し、元画像を破棄しました！');
+      if (!extracted) {
+        setOcrMessage('AIで成分表を読み取れませんでした（AIの設定がない、通信に失敗した、または写真から読み取れなかった）。数値を手で入力してください。');
+        return;
+      }
+      setOcrAiResult({ source: extracted.source, ai_original: extracted.ai_original });
+      setOcrName(extracted.product_name || '');
+      setOcrServingG(extracted.serving_size_g ?? '');
+      setOcrCalories(extracted.calories ?? '');
+      setOcrProteinG(extracted.protein_g ?? '');
+      setOcrFatG(extracted.fat_g ?? '');
+      setOcrCarbsG(extracted.carbs_g ?? '');
+      setOcrMessage('AI（Gemini）で成分表を読み取りました。値を確認・修正してから保存してください。端末内の元画像は破棄しました（分析のため写真はGoogleのGeminiに送信済み）。');
     } catch {
       setOcrMessage('成分表の読み取りに失敗しました。手動で調整してください。');
     } finally {
@@ -293,10 +301,12 @@ export default function HomeScreen({
       calories: ocrCalories,
       protein_g: ocrProteinG,
       fat_g: ocrFatG,
-      carbs_g: ocrCarbsG
+      carbs_g: ocrCarbsG,
+      ...(ocrAiResult || {})
     });
     setProteinPresets(list);
     setMyProtein(preset);
+    setOcrAiResult(null);
     try {
       await fetch('/api/my-protein', {
         method: 'POST',
@@ -321,6 +331,7 @@ export default function HomeScreen({
     setCroppedBodyFile(processed.processedFile);
     setBodyPreviewUrl(processed.previewUrl);
     setQuickBodyResult(null);
+    setQuickBodyError('');
   };
 
   const handleToggleQuickFaceCrop = async () => {
@@ -339,8 +350,16 @@ export default function HomeScreen({
     setIsBodyAnalyzing(true);
     try {
       const result = await analyzeBodyImage(croppedBodyFile);
+      if (!result) {
+        setQuickBodyError('AIで分析できませんでした（AIの設定がない、通信に失敗した、または写真から読み取れなかった）。メニューの「AI（Gemini）の設定」を確認してください。');
+        setQuickBodyResult(null);
+        return;
+      }
+      setQuickBodyError('');
       setQuickBodyResult(result);
-      localStorage.setItem('raku_body_analysis_text', JSON.stringify(result));
+      setUserStorageData('body_analysis', result);
+      const history = getUserStorageData('body_analysis_history', []);
+      setUserStorageData('body_analysis_history', [result, ...(Array.isArray(history) ? history : [])]);
     } finally {
       if (bodyPreviewUrl) revokeImagePreviewUrl(bodyPreviewUrl);
       setBodyPreviewUrl('');
@@ -389,7 +408,8 @@ export default function HomeScreen({
       fat_g: totalFat,
       carbs_g: totalCarbs,
       image_url: '',
-      note: `プロテインクイック記録（割り材: ${baseInfo.name}、P:${totalProtein}g）`
+      note: `プロテインクイック記録（割り材: ${baseInfo.name}、P:${totalProtein}g）`,
+      ...(myProtein.ai_original ? { analysis_json: JSON.stringify({ source: myProtein.source, ai_original: myProtein.ai_original }) } : {})
     };
 
     try {
@@ -487,12 +507,12 @@ export default function HomeScreen({
               </svg>
             </div>
             <span className="text-[9px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md border border-indigo-200/70">
-              🔒 顔カット保護
+              🔒 上部カット
             </span>
           </div>
           <div>
             <span className="text-xs font-extrabold text-slate-900 block leading-snug">理想体型・AI画像分析</span>
-            <p className="text-[10px] text-slate-500 mt-0.5 truncate">上部18%自動カット＆即破棄</p>
+            <p className="text-[10px] text-slate-500 mt-0.5 truncate">上部18%カット・送信後に端末内の画像を破棄</p>
           </div>
           <div className="w-full py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-indigo-600 text-[11px] font-bold text-center">
             AI体型診断を開く ›
@@ -851,7 +871,7 @@ export default function HomeScreen({
               <div>
                 <h3 className="text-sm font-black text-slate-900">📸 体型AIクイック診断</h3>
                 <span className="text-[10px] font-bold text-emerald-700">
-                  🔒 解析後に元画像は自動破棄されます
+                  🔒 解析後、端末内の元画像は破棄（写真はGoogleのGeminiに送信）
                 </span>
               </div>
               <button
@@ -872,10 +892,10 @@ export default function HomeScreen({
             <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200/80">
               <div className="min-w-0">
                 <span className="text-xs font-extrabold text-slate-900 block leading-tight">
-                  🛡️ 顔エリア自動カット（上部18%）
+                  🛡️ 上部18%自動カット
                 </span>
                 <span className="text-[10px] text-slate-500 block">
-                  Canvas処理で顔領域を自動トリミングしてからAI解析
+                  写真の上18%を一律に切り取ってからAI解析（顔を検出しているわけではありません）
                 </span>
               </div>
               <button
@@ -907,7 +927,7 @@ export default function HomeScreen({
                 className="w-full py-5 border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-xl bg-indigo-50/30 flex flex-col items-center justify-center gap-1 cursor-pointer"
               >
                 <span className="text-xs font-bold text-indigo-700">📷 体型写真を選択してクイックAI診断</span>
-                <span className="text-[10px] text-slate-500">選択時に上部18%（顔領域）を自動カット</span>
+                <span className="text-[10px] text-slate-500">選択時に上部18%を自動カット</span>
               </button>
             ) : (
               <div className="space-y-2">
@@ -923,8 +943,14 @@ export default function HomeScreen({
                   onClick={handleRunQuickBodyAnalysis}
                   className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold rounded-xl text-xs shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  {isBodyAnalyzing ? 'AI解析中...' : 'AI解析を実行（完了後に元画像を自動破棄）'}
+                  {isBodyAnalyzing ? 'AI解析中...' : 'AI解析を実行（写真はGoogleのGeminiに送信）'}
                 </button>
+              </div>
+            )}
+
+            {quickBodyError && (
+              <div className="bg-rose-50 rounded-xl p-3.5 border border-rose-200/80 text-[11px] font-bold text-rose-700 leading-relaxed">
+                {quickBodyError}
               </div>
             )}
 
@@ -933,7 +959,7 @@ export default function HomeScreen({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold text-indigo-700">{quickBodyResult.body_type}</span>
                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    推定体脂肪 {quickBodyResult.estimated_body_fat}%
+                    推定体脂肪 {quickBodyResult.estimated_body_fat ?? '-'}%
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-700 leading-relaxed">
@@ -951,7 +977,7 @@ export default function HomeScreen({
               }}
               className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
             >
-              理想写真との2枚比較・詳細画面を開く ›
+              体型分析の詳細画面を開く ›
             </button>
           </div>
         </div>
@@ -1087,9 +1113,9 @@ export default function HomeScreen({
                 />
 
                 <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
                     <span className="text-[11px] font-extrabold text-emerald-950">📷 裏面の栄養成分表示から自動入力</span>
-                    <span className="text-[9px] font-bold text-emerald-700">🔒 解析後元画像破棄</span>
+                    <span className="text-[9px] font-bold text-emerald-700">🔒 解析後、端末内の元画像は破棄（写真はGoogleのGeminiに送信）</span>
                   </div>
                   <button
                     type="button"

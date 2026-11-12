@@ -10,6 +10,8 @@ import MealScreen from './components/MealScreen';
 import WorkoutHubScreen from './components/WorkoutHubScreen';
 import LoginScreen from './components/LoginScreen';
 import OnboardingGuide from './components/OnboardingGuide';
+import AiAndBackupSettings from './components/AiAndBackupSettings';
+import { setStoredGeminiKey } from './utils/geminiAnalyzer';
 import { seedOneWeekDemoData, resetAllAppData } from './utils/demoData';
 import {
   getCurrentAuthUser,
@@ -223,7 +225,11 @@ export default function App() {
 
   const handleLogout = () => {
     if (authUser?.isGuest || authUser?.authProvider === 'guest') {
+      if (!window.confirm('ゲストでログアウトすると、ゲストの記録と、この端末に保存したAIのキーが消えます。先に「記録のバックアップ」で書き出してください。ログアウトしますか？')) {
+        return;
+      }
       clearGuestSessionData();
+      setStoredGeminiKey('');
     }
     clearAuthUserSession();
     setAuthUser(null);
@@ -713,6 +719,13 @@ export default function App() {
                     <span className="text-[10px] text-blue-700 block mt-0.5">記録の始め方を4ステップで紹介します</span>
                   </div>
                 </button>
+
+                <AiAndBackupSettings
+                  onRestored={async () => {
+                    await fetchInitialData();
+                    setDataVersion((v) => v + 1);
+                  }}
+                />
 
                 <div className="bg-slate-50 rounded-2xl border border-slate-200/80 overflow-hidden">
                   <button

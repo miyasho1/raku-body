@@ -19,6 +19,11 @@ import {
 } from '../utils/demoData';
 import { getUserStorageData, setUserStorageData } from '../utils/authService';
 
+const toNum = (v) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export default function MealScreen({ onRecordSuccess, dataVersion }) {
   const getNowTime = () => {
     const d = new Date();
@@ -105,6 +110,7 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
   const [settingCalories, setSettingCalories] = useState(120);
   const [settingFat, setSettingFat] = useState(1.0);
   const [settingCarbs, setSettingCarbs] = useState(2.0);
+  const [labelAiResult, setLabelAiResult] = useState(null);
   const [isAnalyzingLabel, setIsAnalyzingLabel] = useState(false);
   const [isSavingProtein, setIsSavingProtein] = useState(false);
 
@@ -263,23 +269,32 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
 
     try {
       const analysis = await analyzeMealImage(selectedImage);
+      if (!analysis) {
+        setMessage({
+          type: 'error',
+          text: 'AIで読み取れませんでした（AIの設定がない、通信に失敗した、または写真から読み取れなかった）。メニューの「AI（Gemini）の設定」を確認するか、「手動」タブで入力してください。'
+        });
+        return;
+      }
 
       setAnalysisResult({
         ...analysis,
         image_url: ''
       });
 
-      setAdjMealName(analysis.meal_name || '解析料理');
-      setAdjCalories(analysis.calories || 500);
-      setAdjProtein(analysis.protein_g || 25);
-      setAdjFat(analysis.fat_g || 15);
-      setAdjCarbs(analysis.carbs_g || 60);
-      setAdjFiber(analysis.fiber_g || 5);
-      setAdjSalt(analysis.salt_g || 2.0);
+      const orig = analysis.ai_original || {};
+      const missing = ['calories', 'protein_g', 'fat_g', 'carbs_g', 'fiber_g', 'salt_g'].filter((k) => orig[k] === null || orig[k] === undefined);
+      setAdjMealName(analysis.meal_name || '');
+      setAdjCalories(orig.calories ?? 0);
+      setAdjProtein(orig.protein_g ?? 0);
+      setAdjFat(orig.fat_g ?? 0);
+      setAdjCarbs(orig.carbs_g ?? 0);
+      setAdjFiber(orig.fiber_g ?? 0);
+      setAdjSalt(orig.salt_g ?? 0);
 
       setMessage({
         type: 'success',
-        text: 'AI栄養バランスの分析が完了し、元画像データをメモリから自動破棄しました！'
+        text: `AI（Gemini）の推定が完了しました。${missing.length > 0 ? 'AIが返さなかった項目は0にしています。' : ''}値を確認・修正してから保存してください。端末内の元画像は破棄しました（分析のため写真はGoogleのGeminiに送信済み）。`
       });
     } catch {
       setMessage({ type: 'error', text: '画像解析処理中にエラーが発生しました。' });
@@ -380,6 +395,7 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
     };
 
     appendLocalMeal(payload);
+    setLabelAiResult(null);
 
     try {
       await fetch('/api/meals', {
@@ -404,20 +420,27 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
 
     setIsAnalyzingLabel(true);
     setMessage(null);
+    setLabelAiResult(null);
     const tempUrl = URL.createObjectURL(file);
 
     try {
       const extracted = await analyzeNutritionLabelImage(file);
-      if (extracted) {
-        setSettingName(extracted.product_name || 'ホエイプロテイン');
-        setSettingServingSize(extracted.serving_size_g || 30.0);
-        setSettingCalories(extracted.calories || 120);
-        setSettingProtein(extracted.protein_g !== undefined ? extracted.protein_g : 24.0);
-        setSettingFat(extracted.fat_g !== undefined ? extracted.fat_g : 1.0);
-        setSettingCarbs(extracted.carbs_g !== undefined ? extracted.carbs_g : 2.0);
+      if (!extracted) {
+        setMessage({
+          type: 'error',
+          text: 'AIで成分表を読み取れませんでした（AIの設定がない、通信に失敗した、または写真から読み取れなかった）。数値を手で入力してください。'
+        });
+      } else {
+        setLabelAiResult({ source: extracted.source, ai_original: extracted.ai_original });
+        setSettingName(extracted.product_name || '');
+        setSettingServingSize(extracted.serving_size_g ?? '');
+        setSettingCalories(extracted.calories ?? '');
+        setSettingProtein(extracted.protein_g ?? '');
+        setSettingFat(extracted.fat_g ?? '');
+        setSettingCarbs(extracted.carbs_g ?? '');
         setMessage({
           type: 'success',
-          text: '成分表ラベル（OCR）から栄養素を自動抽出し、元画像を破棄しました！'
+          text: 'AI（Gemini）で成分表を読み取りました。値を確認・修正してから保存してください。端末内の元画像は破棄しました（分析のため写真はGoogleのGeminiに送信済み）。'
         });
       }
     } catch {
@@ -436,15 +459,17 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
 
     const { preset, list } = saveProteinPreset({
       product_name: settingName.trim() || 'マイプロテイン',
-      serving_size_g: parseFloat(settingServingSize) || 30.0,
-      protein_g: parseFloat(settingProtein) || 24.0,
-      calories: parseInt(settingCalories, 10) || 120,
-      fat_g: parseFloat(settingFat) || 1.0,
-      carbs_g: parseFloat(settingCarbs) || 2.0
+      serving_size_g: settingServingSize,
+      protein_g: settingProtein,
+      calories: settingCalories,
+      fat_g: settingFat,
+      carbs_g: settingCarbs,
+      ...(labelAiResult || {})
     });
 
     setProteinPresets(list);
     setMyProtein(preset);
+    setLabelAiResult(null);
 
     try {
       await fetch('/api/my-protein', {
@@ -470,18 +495,20 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
       meal_type: currentTime,
       meal_time: currentTime,
       menu_name: settingName.trim() || 'OCR読取食品',
-      calories: parseInt(settingCalories, 10) || 120,
-      protein_level: parseFloat(settingProtein) >= 20 ? '高' : '普通',
+      calories: Math.round(toNum(settingCalories)),
+      protein_level: toNum(settingProtein) >= 20 ? '高' : '普通',
       carbs_level: parseFloat(settingCarbs) <= 15 ? '低' : '普通',
       fat_level: parseFloat(settingFat) <= 10 ? '低' : '普通',
-      protein_g: parseFloat(settingProtein) || 24.0,
-      fat_g: parseFloat(settingFat) || 1.0,
-      carbs_g: parseFloat(settingCarbs) || 2.0,
+      protein_g: toNum(settingProtein),
+      fat_g: toNum(settingFat),
+      carbs_g: toNum(settingCarbs),
+      ...(labelAiResult ? { analysis_json: JSON.stringify({ ...labelAiResult, recorded: { calories: toNum(settingCalories), protein_g: toNum(settingProtein), fat_g: toNum(settingFat), carbs_g: toNum(settingCarbs) } }) } : {}),
       image_url: '',
       note: `成分表OCRから記録（1食 ${settingServingSize}g）`
     };
 
     appendLocalMeal(payload);
+    setLabelAiResult(null);
 
     try {
       await fetch('/api/meals', {
@@ -522,7 +549,8 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
       protein_level: '高',
       carbs_level: totalCarbs > 10 ? '普通' : '低',
       fat_level: totalFat > 8 ? '普通' : '低',
-      feedback_comment: `良質なタンパク質${totalProtein}gを補給完了！`
+      feedback_comment: `良質なタンパク質${totalProtein}gを補給完了！`,
+      ...(myProtein.ai_original ? { source: myProtein.source, ai_original: myProtein.ai_original } : {})
     };
 
     const payload = {
@@ -747,7 +775,7 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
             <div className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/70">
               <span className="text-[10px] font-bold text-slate-600">食事写真のAI栄養推定</span>
               <span className="text-[10px] font-bold text-emerald-700">
-                🔒 解析後に元画像は自動破棄されます
+                🔒 解析後、端末内の元画像は破棄（写真はGoogleのGeminiに送信）
               </span>
             </div>
 
@@ -772,7 +800,7 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
                   </svg>
                 </div>
                 <span className="text-xs font-bold text-slate-900">食事の写真を撮影または選択</span>
-                <span className="text-[10px] text-slate-500">AIがカロリーとPFCを算出し、元画像は即破棄します</span>
+                <span className="text-[10px] text-slate-500">AIがカロリーとPFCを推定します（写真はGoogleのGeminiに送られます）</span>
               </button>
             ) : (
               <div className="space-y-2.5">
@@ -1019,7 +1047,7 @@ export default function MealScreen({ onRecordSuccess, dataVersion }) {
             <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-emerald-950">📷 栄養成分表示ラベル読取 (OCR)</span>
-                <span className="text-[10px] font-bold text-emerald-700">🔒 解析後に元画像は自動破棄されます</span>
+                <span className="text-[10px] font-bold text-emerald-700">🔒 解析後、端末内の元画像は破棄（写真はGoogleのGeminiに送信）</span>
               </div>
               <p className="text-[10px] text-slate-600">
                 プロテインや市販食品の裏面「栄養成分表示」を撮影すると、カロリー・P・F・Cを自動抽出します。

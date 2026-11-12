@@ -4,6 +4,7 @@ import {
   processPrivacyImage,
   revokeImagePreviewUrl
 } from '../utils/geminiAnalyzer';
+import { getUserStorageData, setUserStorageData } from '../utils/authService';
 
 export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
   const [isFaceCropEnabled, setIsFaceCropEnabled] = useState(true);
@@ -30,24 +31,10 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
     };
   }, []);
 
-  const fetchLatestAnalysis = async () => {
-    try {
-      const res = await fetch('/api/body-analysis');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.has_analysis && data.data) {
-          setAnalysisResult(data.data);
-          return;
-        }
-      }
-    } catch {
-    }
-    try {
-      const cached = localStorage.getItem('raku_body_analysis_text');
-      if (cached) {
-        setAnalysisResult(JSON.parse(cached));
-      }
-    } catch {
+  const fetchLatestAnalysis = () => {
+    const cached = getUserStorageData('body_analysis', null);
+    if (cached && cached.source === 'ai_gemini') {
+      setAnalysisResult(cached);
     }
   };
 
@@ -139,63 +126,31 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
       setMessage({ type: 'error', text: '現在の体型写真を選択してください。' });
       return;
     }
-    if (idealPreviews.length === 0) {
-      setMessage({ type: 'error', text: 'なりたい理想の体型写真を1枚以上選択してください。' });
-      return;
-    }
 
     setIsAnalyzing(true);
     setMessage(null);
 
-    const formData = new FormData();
-    if (idealFiles.length > 0) {
-      idealFiles.forEach((file) => {
-        formData.append('ideal_files', file);
-      });
-    } else {
-      const dummyBlob = new Blob(['sample'], { type: 'image/jpeg' });
-      formData.append('ideal_files', dummyBlob, 'ideal_prev.jpg');
-    }
-
-    if (currentFile) {
-      formData.append('current_file', currentFile);
-    } else {
-      const dummyBlob = new Blob(['sample'], { type: 'image/jpeg' });
-      formData.append('current_file', dummyBlob, 'curr_prev.jpg');
-    }
-
     try {
-      const analysis = await analyzeBodyImage(currentFile);
-      let finalData = analysis;
-
-      try {
-        const res = await fetch('/api/analyze-body-target', {
-          method: 'POST',
-          body: formData
+      const analysis = currentFile ? await analyzeBodyImage(currentFile) : null;
+      if (!analysis) {
+        setMessage({
+          type: 'error',
+          text: currentFile
+            ? 'AIで分析できませんでした（AIの設定がない、通信に失敗した、または写真から読み取れなかった）。メニューの「AI（Gemini）の設定」を確認してください。'
+            : '現在の体型の写真を選んでください。'
         });
-        if (res.ok) {
-          const resData = await res.json();
-          if (resData && resData.data) {
-            finalData = { ...resData.data, ...analysis };
-          }
-        }
-      } catch {
+        return;
       }
-
-      setAnalysisResult(finalData);
-      localStorage.setItem('raku_body_analysis_text', JSON.stringify(finalData));
+      setAnalysisResult(analysis);
+      setUserStorageData('body_analysis', analysis);
+      const history = getUserStorageData('body_analysis_history', []);
+      setUserStorageData('body_analysis_history', [analysis, ...(Array.isArray(history) ? history : [])]);
       setMessage({
         type: 'success',
-        text: 'AI体型分析が完了し、元画像データをメモリから自動破棄しました。'
+        text: 'AI（Gemini）で現在の写真を分析しました（理想の写真との比較はまだ対応していません）。端末内の元画像は破棄しました（分析のため写真はGoogleのGeminiに送信済み）。'
       });
     } catch {
-      const fallbackAnalysis = await analyzeBodyImage(null);
-      setAnalysisResult(fallbackAnalysis);
-      localStorage.setItem('raku_body_analysis_text', JSON.stringify(fallbackAnalysis));
-      setMessage({
-        type: 'success',
-        text: 'AI体型分析が完了し、元画像データをメモリから自動破棄しました。'
-      });
+      setMessage({ type: 'error', text: '分析中にエラーが発生しました。' });
     } finally {
       purgeRawImagesFromMemory();
       setIsAnalyzing(false);
@@ -212,7 +167,7 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
           ‹ ホームへ戻る
         </button>
         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl">
-          🔒 解析後に元画像は自動破棄されます
+          🔒 解析後、端末内の元画像は破棄（写真はGoogleのGeminiに送信）
         </span>
       </div>
 
@@ -230,10 +185,10 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
         <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200/80">
           <div className="min-w-0">
             <span className="text-xs font-extrabold text-slate-900 block leading-tight">
-              🛡️ 顔エリア自動カット（上部18%）
+              🛡️ 上部18%自動カット
             </span>
             <span className="text-[10px] text-slate-500 block">
-              顔が写る上部領域をCanvasで自動トリミングして保護
+              写真の上18%を一律に切り取ります（顔の位置によっては残ります）
             </span>
           </div>
           <button
@@ -276,7 +231,7 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
                 <span>理想の体型</span>
               </span>
               <span className="text-[9px] text-slate-400">
-                {isFaceCropEnabled ? '顔カット済' : `${idealPreviews.length}枚`}
+                {isFaceCropEnabled ? '上部カット済' : `${idealPreviews.length}枚`}
               </span>
             </div>
 
@@ -315,7 +270,7 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
                 <span>現在の体型</span>
               </span>
               <span className="text-[9px] text-slate-400">
-                {isFaceCropEnabled ? '顔カット済' : '正面/側面'}
+                {isFaceCropEnabled ? '上部カット済' : '正面/側面'}
               </span>
             </div>
 
@@ -353,7 +308,7 @@ export default function BodyAnalysisScreen({ onBack, onApplyWorkoutMenu }) {
               <span>骨格・部位別の差分を分析中...</span>
             </>
           ) : (
-            <span>体型比較と推奨メニューを生成（解析後に画像破棄）</span>
+            <span>体型分析と推奨メニューを生成（写真はGoogleのGeminiに送信）</span>
           )}
         </button>
       </section>

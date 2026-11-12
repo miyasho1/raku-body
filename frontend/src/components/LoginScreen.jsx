@@ -378,11 +378,11 @@ export default function LoginScreen({ onLoginSuccess }) {
           </div>
           <div className="grid grid-cols-2 gap-2.5 w-full">
             <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 min-w-0">
-              <span className="text-[11px] font-bold text-slate-800 block">顔領域18%自動カット</span>
+              <span className="text-[11px] font-bold text-slate-800 block">上部18%自動カット</span>
               <span className="text-[10px] text-slate-500 block mt-0.5">体型写真の上部を自動トリミング</span>
             </div>
             <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 min-w-0">
-              <span className="text-[11px] font-bold text-slate-800 block">元画像のメモリ即破棄</span>
+              <span className="text-[11px] font-bold text-slate-800 block">解析後に端末内の元画像を破棄</span>
               <span className="text-[10px] text-slate-500 block mt-0.5">解析後は数値とテキストのみ保存</span>
             </div>
           </div>

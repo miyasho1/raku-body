@@ -62,12 +62,13 @@ export function saveProteinPreset(newItem) {
   const cleanItem = {
     id: newItem.id || `preset_${Date.now()}`,
     product_name: (newItem.product_name || 'マイプロテイン').trim(),
-    serving_size_g: Number(parseFloat(newItem.serving_size_g) || 30.0),
-    calories: Math.round(parseFloat(newItem.calories) || 120),
-    protein_g: Number(parseFloat(newItem.protein_g) || 24.0),
-    fat_g: Number(parseFloat(newItem.fat_g !== undefined ? newItem.fat_g : 1.0)),
-    carbs_g: Number(parseFloat(newItem.carbs_g !== undefined ? newItem.carbs_g : 2.0)),
-    category: newItem.category || 'マイ登録'
+    serving_size_g: Number.isFinite(parseFloat(newItem.serving_size_g)) ? parseFloat(newItem.serving_size_g) : 0,
+    calories: Math.round(Number.isFinite(parseFloat(newItem.calories)) ? parseFloat(newItem.calories) : 0),
+    protein_g: Number.isFinite(parseFloat(newItem.protein_g)) ? parseFloat(newItem.protein_g) : 0,
+    fat_g: Number.isFinite(parseFloat(newItem.fat_g)) ? parseFloat(newItem.fat_g) : 0,
+    carbs_g: Number.isFinite(parseFloat(newItem.carbs_g)) ? parseFloat(newItem.carbs_g) : 0,
+    category: newItem.category || 'マイ登録',
+    ...(newItem.ai_original ? { source: newItem.source, ai_original: newItem.ai_original } : {})
   };
 
   const existingIdx = current.findIndex(
@@ -275,7 +276,9 @@ export async function resetAllAppData(targetUid = null) {
     'body_height',
     'user_height',
     'target_weight',
-    'target_calories'
+    'target_calories',
+    'body_analysis',
+    'body_analysis_history'
   ];
   keys.forEach((k) => removeUserStorageData(k, uid));
   keys.forEach((k) => {

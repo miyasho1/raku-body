@@ -13,3 +13,7 @@ backend/uploads/
 .DS_Store
 Thumbs.db
 *.log
+
+docs/
+CLAUDE.md
+raku-body_書き出し_*/
